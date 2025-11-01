@@ -210,6 +210,12 @@
             backdrop-filter: blur(10px);
         }
 
+        .delete-hint {
+            color: #FF5252;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+
         /* Медиа-запросы для мобильных устройств */
         @media (max-width: 768px) {
             .game-boards {
@@ -277,6 +283,7 @@
             <div class="ship-palette" id="shipPalette">
                 <!-- Корабли будут добавлены динамически -->
             </div>
+            <div class="delete-hint">💡 Для удаления корабля кликните по нему на поле</div>
         </div>
 
         <div class="game-boards">
@@ -430,28 +437,34 @@
                 const y = event.clientY - rect.top;
                 
                 const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
-                if (hex && this.selectedShip) {
-                    if (this.placeShip(hex.row, hex.col, this.selectedShip, this.shipOrientation)) {
-                        const shipElement = document.querySelector(`.ship[data-ship-index="${this.selectedShip.typeIndex}"][data-ship-instance="${this.selectedShip.instance}"]`);
-                        if (shipElement) {
-                            shipElement.classList.add('placed');
-                            shipElement.classList.remove('selected');
-                        }
-                        
-                        this.selectedShip = null;
-                        this.drawBoards();
-                        this.updateScores();
-                        
-                        if (this.allShipsPlaced()) {
-                            document.getElementById('startGame').style.display = 'block';
+                if (hex) {
+                    // Если выбран корабль - пытаемся разместить
+                    if (this.selectedShip) {
+                        if (this.placeShip(hex.row, hex.col, this.selectedShip, this.shipOrientation)) {
+                            const shipElement = document.querySelector(`.ship[data-ship-index="${this.selectedShip.typeIndex}"][data-ship-instance="${this.selectedShip.instance}"]`);
+                            if (shipElement) {
+                                shipElement.classList.add('placed');
+                                shipElement.classList.remove('selected');
+                            }
                             
-                            if (this.isOnline && this.isHost) {
-                                this.sendData({
-                                    type: 'ready',
-                                    ships: this.myShips
-                                });
+                            this.selectedShip = null;
+                            this.drawBoards();
+                            this.updateScores();
+                            
+                            if (this.allShipsPlaced()) {
+                                document.getElementById('startGame').style.display = 'block';
+                                
+                                if (this.isOnline && this.isHost) {
+                                    this.sendData({
+                                        type: 'ready',
+                                        ships: this.myShips
+                                    });
+                                }
                             }
                         }
+                    } else {
+                        // Если корабль не выбран - пытаемся удалить существующий
+                        this.removeShipAt(hex.row, hex.col);
                     }
                 }
             }
@@ -470,7 +483,6 @@
             }
             
             getHexAtPosition(x, y, canvas) {
-                // Уменьшаем размер гекса для более мелких ячеек
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
@@ -500,7 +512,6 @@
                 return (hexHeight * hexSize - hexHeight * dx - hexSize * dy) >= 0;
             }
             
-            // Уменьшаем размер гекса
             getHexSize(canvas) {
                 return Math.min(canvas.width, canvas.height) / (this.boardSize * 2.2);
             }
@@ -510,10 +521,9 @@
                 
                 if (!positions) return false;
                 
-                for (const pos of positions) {
-                    if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
-                        return false;
-                    }
+                // Проверяем, что корабль не пересекается с другими и не касается их
+                if (!this.canPlaceShip(positions)) {
+                    return false;
                 }
                 
                 const shipData = {
@@ -530,6 +540,112 @@
                 
                 this.myShips.push(shipData);
                 return true;
+            }
+            
+            // Проверка возможности размещения корабля (без касания других кораблей)
+            canPlaceShip(positions) {
+                for (const pos of positions) {
+                    // Проверяем, что клетка свободна
+                    if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
+                        return false;
+                    }
+                    
+                    // Проверяем все соседние клетки (включая диагональные в гексагональной сетке)
+                    const neighbors = this.getNeighborCells(pos.row, pos.col);
+                    for (const neighbor of neighbors) {
+                        if (this.myBoard[neighbor.row][neighbor.col] === 'ship') {
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+            
+            // Получение всех соседних клеток (включая диагональные)
+            getNeighborCells(row, col) {
+                const neighbors = [];
+                const directions = [
+                    { dr: 0, dc: 1 },   // Вправо
+                    { dr: -1, dc: 1 },  // Вверх-вправо
+                    { dr: -1, dc: 0 },  // Вверх-влево
+                    { dr: 0, dc: -1 },  // Влево
+                    { dr: 1, dc: -1 },  // Вниз-влево
+                    { dr: 1, dc: 0 },   // Вниз-вправо
+                    // Диагональные направления в гексагональной сетке
+                    { dr: -1, dc: 2 },  // Диагональ
+                    { dr: -2, dc: 1 },  // Диагональ
+                    { dr: -2, dc: -1 }, // Диагональ
+                    { dr: -1, dc: -2 }, // Диагональ
+                    { dr: 1, dc: -2 },  // Диагональ
+                    { dr: 2, dc: -1 },  // Диагональ
+                    { dr: 2, dc: 1 },   // Диагональ
+                    { dr: 1, dc: 2 }    // Диагональ
+                ];
+                
+                for (const dir of directions) {
+                    const newRow = row + dir.dr;
+                    const newCol = col + dir.dc;
+                    
+                    if (this.isValidPosition(newRow, newCol)) {
+                        neighbors.push({ row: newRow, col: newCol });
+                    }
+                }
+                
+                return neighbors;
+            }
+            
+            // Удаление корабля по позиции
+            removeShipAt(row, col) {
+                if (this.myBoard[row][col] !== 'ship') return;
+                
+                // Находим корабль, который занимает эту клетку
+                const shipIndex = this.myShips.findIndex(ship => 
+                    ship.positions.some(pos => pos.row === row && pos.col === col)
+                );
+                
+                if (shipIndex !== -1) {
+                    const ship = this.myShips[shipIndex];
+                    
+                    // Освобождаем клетки
+                    for (const pos of ship.positions) {
+                        this.myBoard[pos.row][pos.col] = '';
+                    }
+                    
+                    // Удаляем корабль из массива
+                    this.myShips.splice(shipIndex, 1);
+                    
+                    // Обновляем палитру
+                    this.updateShipPalette();
+                    
+                    this.drawBoards();
+                    this.updateScores();
+                    
+                    // Скрываем кнопку начала игры, если не все корабли размещены
+                    if (!this.allShipsPlaced()) {
+                        document.getElementById('startGame').style.display = 'none';
+                    }
+                }
+            }
+            
+            // Обновление состояния палитры кораблей
+            updateShipPalette() {
+                const palette = document.getElementById('shipPalette');
+                const shipElements = palette.querySelectorAll('.ship');
+                
+                // Сбрасываем все корабли в палитре
+                shipElements.forEach(shipElement => {
+                    shipElement.classList.remove('placed');
+                });
+                
+                // Помечаем размещенные корабли
+                this.myShips.forEach(ship => {
+                    const shipElement = document.querySelector(
+                        `.ship[data-ship-index="${ship.typeIndex}"][data-ship-instance="${ship.instance}"]`
+                    );
+                    if (shipElement) {
+                        shipElement.classList.add('placed');
+                    }
+                });
             }
             
             getShipPositions(row, col, size, orientation) {
@@ -574,7 +690,8 @@
                         let placed = false;
                         let attempts = 0;
                         
-                        while (!placed && attempts < 100) {
+                        // Пытаемся разместить корабль, пока не найдем валидную позицию
+                        while (!placed && attempts < 500) { // Увеличиваем лимит попыток
                             const row = Math.floor(Math.random() * this.boardSize);
                             const col = Math.floor(Math.random() * this.boardSize);
                             const orientation = Math.floor(Math.random() * 6);
@@ -585,8 +702,30 @@
                                 size: shipType.size
                             };
                             
-                            placed = this.placeShip(row, col, ship, orientation);
+                            const positions = this.getShipPositions(row, col, ship.size, orientation);
+                            
+                            if (positions && this.canPlaceShip(positions)) {
+                                // Размещаем корабль
+                                const shipData = {
+                                    positions: positions,
+                                    hits: Array(shipType.size).fill(false),
+                                    size: shipType.size,
+                                    typeIndex: typeIndex,
+                                    instance: i
+                                };
+                                
+                                for (const pos of positions) {
+                                    this.myBoard[pos.row][pos.col] = 'ship';
+                                }
+                                
+                                this.myShips.push(shipData);
+                                placed = true;
+                            }
                             attempts++;
+                        }
+                        
+                        if (!placed) {
+                            console.warn(`Не удалось разместить корабль ${shipType.name} (${shipType.size})`);
                         }
                     }
                 });
@@ -831,13 +970,7 @@
                     if (hex) {
                         const positions = this.getShipPositions(hex.row, hex.col, this.selectedShip.size, this.shipOrientation);
                         if (positions) {
-                            let valid = true;
-                            for (const pos of positions) {
-                                if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
-                                    valid = false;
-                                    break;
-                                }
-                            }
+                            let valid = this.canPlaceShip(positions);
                             
                             ctx.globalAlpha = 0.6;
                             for (const pos of positions) {
