@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Гексагональный Морской Бой</title>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: white;
+            margin-bottom: 20px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .game-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .players {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+
+        .player {
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.2em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
+            position: relative;
+            border: 2px solid transparent;
+        }
+
+        .player.active {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .player.me { border-left: 4px solid #4CAF50; }
+        .player.opponent { border-left: 4px solid #FF5252; }
+
+        .score {
+            font-size: 1.5em;
+            color: #fff;
+            margin-top: 5px;
+        }
+
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1em;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .game-boards {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            flex-wrap: wrap;
+        }
+
+        .board-container {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .board-title {
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            cursor: pointer;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 50, 0.7);
+            border-radius: 10px;
+        }
+
+        .ship-palette {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .ship {
+            padding: 8px 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .ship.selected {
+            background: rgba(76, 175, 80, 0.5);
+            border: 2px solid #4CAF50;
+        }
+
+        .ship.placed {
+            background: rgba(100, 100, 100, 0.5);
+            cursor: not-allowed;
+        }
+
+        .online-buttons {
+            text-align: center;
+            margin: 15px 0;
+        }
+
+        .online-buttons input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            margin: 5px;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        #connectionStatus {
+            transition: all 0.3s ease;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        #roomInfo {
+            background: rgba(233, 236, 239, 0.2);
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #4CAF50;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .game-phase {
+            font-size: 1.2em;
+            margin: 15px 0;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .hit-marker {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: red;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #ccc;
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚓ Гексагональный Морской Бой</h1>
+        
+        <div class="game-info">
+            <div class="game-mode">
+                <button class="mode-btn active" id="modeLocal">👥 Локальная игра</button>
+                <button class="mode-btn" id="modeOnline">🌐 Онлайн игра</button>
+            </div>
+            
+            <div id="onlineLobby" style="display: none;">
+                <h3>Онлайн игра</h3>
+                <div class="online-buttons">
+                    <button onclick="createOnlineGame()" class="control-btn">Создать комнату</button>
+                    <div style="margin: 10px 0; text-align: center">или</div>
+                    <input type="text" id="roomIdInput" placeholder="ID комнаты" style="padding: 10px; width: 200px; margin-right: 10px;">
+                    <button onclick="joinOnlineGame()" class="control-btn">Присоединиться</button>
+                </div>
+                <div id="connectionStatus"></div>
+                <div id="roomInfo"></div>
+            </div>
+            
+            <div class="players">
+                <div class="player me" id="playerMe">
+                    Ваш флот
+                    <div class="score" id="scoreMe">0 кораблей</div>
+                </div>
+                <div class="player opponent" id="playerOpponent">
+                    Флот противника
+                    <div class="score" id="scoreOpponent">0 кораблей</div>
+                </div>
+            </div>
+            
+            <div class="game-phase" id="gamePhase">Фаза расстановки кораблей</div>
+            
+            <div class="controls">
+                <button id="randomShips">Случайная расстановка</button>
+                <button id="startGame" style="display: none;">Начать игру</button>
+                <button id="newGameBtn">Новая игра</button>
+            </div>
+            
+            <div class="ship-palette" id="shipPalette">
+                <!-- Корабли будут добавлены динамически -->
+            </div>
+        </div>
+
+        <div class="game-boards">
+            <div class="board-container">
+                <div class="board-title">Ваше поле</div>
+                <canvas id="myBoard" width="500" height="500"></canvas>
+            </div>
+            <div class="board-container">
+                <div class="board-title">Поле противника</div>
+                <canvas id="opponentBoard" width="500" height="500"></canvas>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <p>Расставьте свои корабли на левом поле. Кликните на корабль в палитре, затем на поле для размещения.</p>
+            <p>В режиме боя кликайте на правое поле, чтобы атаковать корабли противника.</p>
+            <p>Корабли могут располагаться в любом из 6 направлений гексагональной сетки.</p>
+        </div>
+    </div>
+
+    <script>
+        class HexagonalBattleship {
+            constructor() {
+                this.myBoardCanvas = document.getElementById('myBoard');
+                this.opponentBoardCanvas = document.getElementById('opponentBoard');
+                this.myCtx = this.myBoardCanvas.getContext('2d');
+                this.opponentCtx = this.opponentBoardCanvas.getContext('2d');
+                
+                // Настройки игры
+                this.boardSize = 8;
+                this.ships = [
+                    { size: 4, count: 1, name: "Линкор" },
+                    { size: 3, count: 2, name: "Крейсер" },
+                    { size: 2, count: 3, name: "Эсминец" },
+                    { size: 1, count: 4, name: "Катер" }
+                ];
+                
+                // Игровое состояние
+                this.myBoard = [];
+                this.opponentBoard = [];
+                this.myShips = [];
+                this.opponentShips = [];
+                this.myShots = [];
+                this.opponentShots = [];
+                this.currentPlayer = 'me';
+                this.gamePhase = 'setup'; // 'setup', 'battle', 'gameover'
+                this.selectedShip = null;
+                this.shipOrientation = 0; // 0-5 направления
+                
+                // Онлайн-переменные
+                this.peer = null;
+                this.connection = null;
+                this.isOnline = false;
+                this.isHost = false;
+                this.roomId = null;
+                
+                this.initializeGame();
+                this.setupEventListeners();
+                this.createShipPalette();
+                this.drawBoards();
+            }
+            
+            initializeGame() {
+                // Инициализация пустых полей
+                this.myBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(''));
+                this.opponentBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(''));
+                
+                this.myShips = [];
+                this.opponentShips = [];
+                this.myShots = [];
+                this.opponentShots = [];
+                this.currentPlayer = 'me';
+                this.gamePhase = 'setup';
+                this.selectedShip = null;
+                
+                this.updateGamePhase();
+                this.updateScores();
+                this.drawBoards();
+                
+                // Сброс палитры кораблей
+                this.createShipPalette();
+                
+                // Показать/скрыть кнопки
+                document.getElementById('startGame').style.display = this.isOnline ? 'none' : 'block';
+            }
+            
+            setupEventListeners() {
+                this.myBoardCanvas.addEventListener('click', (e) => this.handleMyBoardClick(e));
+                this.opponentBoardCanvas.addEventListener('click', (e) => this.handleOpponentBoardClick(e));
+                
+                document.getElementById('modeLocal').addEventListener('click', () => this.setGameMode('local'));
+                document.getElementById('modeOnline').addEventListener('click', () => this.setGameMode('online'));
+                document.getElementById('randomShips').addEventListener('click', () => this.randomizeShips());
+                document.getElementById('startGame').addEventListener('click', () => this.startBattle());
+                document.getElementById('newGameBtn').addEventListener('click', () => this.initializeGame());
+                
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'r' || e.key === 'к') {
+                        this.shipOrientation = (this.shipOrientation + 1) % 6;
+                        this.drawBoards();
+                    }
+                });
+            }
+            
+            setGameMode(mode) {
+                this.isOnline = mode === 'online';
+                document.getElementById('onlineLobby').style.display = this.isOnline ? 'block' : 'none';
+                
+                // Обновление кнопок режима
+                document.getElementById('modeLocal').classList.toggle('active', mode === 'local');
+                document.getElementById('modeOnline').classList.toggle('active', mode === 'online');
+                
+                if (mode === 'local') {
+                    this.leaveOnlineGame();
+                }
+            }
+            
+            createShipPalette() {
+                const palette = document.getElementById('shipPalette');
+                palette.innerHTML = '';
+                
+                this.ships.forEach((shipType, index) => {
+                    for (let i = 0; i < shipType.count; i++) {
+                        const shipElement = document.createElement('div');
+                        shipElement.className = 'ship';
+                        shipElement.textContent = `${shipType.name} (${shipType.size})`;
+                        shipElement.dataset.shipIndex = index;
+                        shipElement.dataset.shipInstance = i;
+                        
+                        shipElement.addEventListener('click', () => {
+                            if (!shipElement.classList.contains('placed')) {
+                                document.querySelectorAll('.ship').forEach(s => s.classList.remove('selected'));
+                                shipElement.classList.add('selected');
+                                this.selectedShip = {
+                                    typeIndex: index,
+                                    instance: i,
+                                    size: shipType.size
+                                };
+                            }
+                        });
+                        
+                        palette.appendChild(shipElement);
+                    }
+                });
+            }
+            
+            handleMyBoardClick(event) {
+                if (this.gamePhase !== 'setup') return;
+                
+                const rect = this.myBoardCanvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
+                if (hex && this.selectedShip) {
+                    if (this.placeShip(hex.row, hex.col, this.selectedShip, this.shipOrientation)) {
+                        // Помечаем корабль как размещенный
+                        const shipElement = document.querySelector(`.ship[data-ship-index="${this.selectedShip.typeIndex}"][data-ship-instance="${this.selectedShip.instance}"]`);
+                        if (shipElement) {
+                            shipElement.classList.add('placed');
+                            shipElement.classList.remove('selected');
+                        }
+                        
+                        this.selectedShip = null;
+                        this.drawBoards();
+                        this.updateScores();
+                        
+                        // Проверяем, все ли корабли размещены
+                        if (this.allShipsPlaced()) {
+                            document.getElementById('startGame').style.display = 'block';
+                            
+                            if (this.isOnline && this.isHost) {
+                                this.sendData({
+                                    type: 'ready',
+                                    ships: this.myShips
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            handleOpponentBoardClick(event) {
+                if (this.gamePhase !== 'battle' || this.currentPlayer !== 'me') return;
+                
+                const rect = this.opponentBoardCanvas.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                
+                const hex = this.getHexAtPosition(x, y, this.opponentBoardCanvas);
+                if (hex && !this.isAlreadyShot(hex.row, hex.col, this.myShots)) {
+                    this.makeShot(hex.row, hex.col);
+                }
+            }
+            
+            getHexAtPosition(x, y, canvas) {
+                const hexSize = this.getHexSize(canvas);
+                const hexHeight = hexSize * Math.sqrt(3);
+                const hexWidth = hexSize * 2;
+                
+                const gridX = Math.floor(x / (hexWidth * 0.75));
+                const gridY = Math.floor((y - (gridX % 2) * hexHeight / 2) / hexHeight);
+                
+                for (let row = Math.max(0, gridY - 1); row <= Math.min(this.boardSize - 1, gridY + 1); row++) {
+                    for (let col = Math.max(0, gridX - 1); col <= Math.min(this.boardSize - 1, gridX + 1); col++) {
+                        const hexX = col * hexWidth * 0.75 + hexWidth / 2;
+                        const hexY = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        
+                        if (this.isPointInHex(x, y, hexX, hexY, hexSize, hexHeight)) {
+                            return { row, col };
+                        }
+                    }
+                }
+                return null;
+            }
+            
+            isPointInHex(x, y, hexX, hexY, hexSize, hexHeight) {
+                const dx = Math.abs(x - hexX);
+                const dy = Math.abs(y - hexY);
+                
+                if (dx > hexSize || dy > hexHeight / 2) return false;
+                return (hexHeight * hexSize - hexHeight * dx - hexSize * dy) >= 0;
+            }
+            
+            getHexSize(canvas) {
+                return Math.min(canvas.width, canvas.height) / (this.boardSize * 1.8);
+            }
+            
+            placeShip(row, col, ship, orientation) {
+                // Проверяем, можно ли разместить корабль
+                const positions = this.getShipPositions(row, col, ship.size, orientation);
+                
+                if (!positions) return false;
+                
+                // Проверяем, не пересекается ли корабль с другими
+                for (const pos of positions) {
+                    if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
+                        return false;
+                    }
+                }
+                
+                // Размещаем корабль
+                const shipData = {
+                    positions: positions,
+                    hits: Array(ship.size).fill(false),
+                    size: ship.size,
+                    typeIndex: ship.typeIndex,
+                    instance: ship.instance
+                };
+                
+                for (const pos of positions) {
+                    this.myBoard[pos.row][pos.col] = 'ship';
+                }
+                
+                this.myShips.push(shipData);
+                return true;
+            }
+            
+            getShipPositions(row, col, size, orientation) {
+                const positions = [{ row, col }];
+                let currentRow = row;
+                let currentCol = col;
+                
+                // Направления в гексагональной сетке
+                const directions = [
+                    { dr: 0, dc: 1 },   // Вправо
+                    { dr: -1, dc: 1 },  // Вверх-вправо
+                    { dr: -1, dc: 0 },  // Вверх-влево
+                    { dr: 0, dc: -1 },  // Влево
+                    { dr: 1, dc: -1 },  // Вниз-влево
+                    { dr: 1, dc: 0 }    // Вниз-вправо
+                ];
+                
+                const dir = directions[orientation];
+                
+                for (let i = 1; i < size; i++) {
+                    currentRow += dir.dr;
+                    currentCol += dir.dc;
+                    
+                    if (!this.isValidPosition(currentRow, currentCol)) {
+                        return null;
+                    }
+                    
+                    positions.push({ row: currentRow, col: currentCol });
+                }
+                
+                return positions;
+            }
+            
+            isValidPosition(row, col) {
+                return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
+            }
+            
+            randomizeShips() {
+                this.initializeGame();
+                
+                this.ships.forEach((shipType, typeIndex) => {
+                    for (let i = 0; i < shipType.count; i++) {
+                        let placed = false;
+                        let attempts = 0;
+                        
+                        while (!placed && attempts < 100) {
+                            const row = Math.floor(Math.random() * this.boardSize);
+                            const col = Math.floor(Math.random() * this.boardSize);
+                            const orientation = Math.floor(Math.random() * 6);
+                            
+                            const ship = {
+                                typeIndex: typeIndex,
+                                instance: i,
+                                size: shipType.size
+                            };
+                            
+                            placed = this.placeShip(row, col, ship, orientation);
+                            attempts++;
+                        }
+                    }
+                });
+                
+                this.createShipPalette();
+                this.drawBoards();
+                this.updateScores();
+                
+                if (this.allShipsPlaced()) {
+                    document.getElementById('startGame').style.display = 'block';
+                    
+                    if (this.isOnline && this.isHost) {
+                        this.sendData({
+                            type: 'ready',
+                            ships: this.myShips
+                        });
+                    }
+                }
+            }
+            
+            allShipsPlaced() {
+                let totalShips = 0;
+                this.ships.forEach(shipType => {
+                    totalShips += shipType.count;
+                });
+                
+                return this.myShips.length === totalShips;
+            }
+            
+            startBattle() {
+                if (!this.allShipsPlaced()) return;
+                
+                this.gamePhase = 'battle';
+                this.currentPlayer = 'me';
+                this.updateGamePhase();
+                this.drawBoards();
+                
+                if (this.isOnline) {
+                    this.sendData({
+                        type: 'start_battle'
+                    });
+                }
+            }
+            
+            makeShot(row, col) {
+                if (this.gamePhase !== 'battle') return;
+                
+                // Локальная обработка выстрела
+                this.myShots.push({ row, col });
+                
+                let hit = false;
+                let sunkShip = null;
+                
+                // Проверяем попадание
+                for (const ship of this.opponentShips) {
+                    for (let i = 0; i < ship.positions.length; i++) {
+                        const pos = ship.positions[i];
+                        if (pos.row === row && pos.col === col) {
+                            hit = true;
+                            ship.hits[i] = true;
+                            
+                            // Проверяем, потоплен ли корабль
+                            if (ship.hits.every(h => h)) {
+                                sunkShip = ship;
+                            }
+                            break;
+                        }
+                    }
+                    if (hit) break;
+                }
+                
+                // Обновляем поле противника
+                this.opponentBoard[row][col] = hit ? 'hit' : 'miss';
+                
+                this.drawBoards();
+                this.updateScores();
+                
+                // Проверяем конец игры
+                if (this.checkGameOver()) {
+                    this.gamePhase = 'gameover';
+                    this.updateGamePhase();
+                    alert('Вы победили!');
+                    return;
+                }
+                
+                // Если онлайн, отправляем результат выстрела
+                if (this.isOnline) {
+                    this.sendData({
+                        type: 'shot',
+                        row: row,
+                        col: col,
+                        hit: hit,
+                        sunkShip: sunkShip
+                    });
+                    
+                    if (!hit) {
+                        this.currentPlayer = 'opponent';
+                        this.updateGamePhase();
+                    }
+                } else {
+                    // Локальная игра - ход противника (простой бот)
+                    if (!hit) {
+                        this.currentPlayer = 'opponent';
+                        this.updateGamePhase();
+                        setTimeout(() => this.makeBotMove(), 1000);
+                    }
+                }
+            }
+            
+            makeBotMove() {
+                if (this.gamePhase !== 'battle' || this.currentPlayer !== 'opponent') return;
+                
+                let row, col;
+                let attempts = 0;
+                
+                // Простой ИИ для бота
+                do {
+                    row = Math.floor(Math.random() * this.boardSize);
+                    col = Math.floor(Math.random() * this.boardSize);
+                    attempts++;
+                } while (this.isAlreadyShot(row, col, this.opponentShots) && attempts < 100);
+                
+                if (attempts < 100) {
+                    this.receiveShot(row, col);
+                }
+            }
+            
+            receiveShot(row, col) {
+                if (this.gamePhase !== 'battle') return;
+                
+                this.opponentShots.push({ row, col });
+                
+                let hit = false;
+                let sunkShip = null;
+                
+                // Проверяем попадание
+                for (const ship of this.myShips) {
+                    for (let i = 0; i < ship.positions.length; i++) {
+                        const pos = ship.positions[i];
+                        if (pos.row === row && pos.col === col) {
+                            hit = true;
+                            ship.hits[i] = true;
+                            
+                            // Проверяем, потоплен ли корабль
+                            if (ship.hits.every(h => h)) {
+                                sunkShip = ship;
+                            }
+                            break;
+                        }
+                    }
+                    if (hit) break;
+                }
+                
+                // Обновляем наше поле
+                this.myBoard[row][col] = hit ? 'hit' : 'miss';
+                
+                this.drawBoards();
+                this.updateScores();
+                
+                // Проверяем конец игры
+                if (this.checkGameOver()) {
+                    this.gamePhase = 'gameover';
+                    this.updateGamePhase();
+                    alert('Противник победил!');
+                    return;
+                }
+                
+                // Если онлайн, отправляем результат выстрела
+                if (this.isOnline) {
+                    this.sendData({
+                        type: 'shot_result',
+                        row: row,
+                        col: col,
+                        hit: hit,
+                        sunkShip: sunkShip
+                    });
+                    
+                    if (!hit) {
+                        this.currentPlayer = 'me';
+                        this.updateGamePhase();
+                    }
+                } else {
+                    // Локальная игра - возвращаем ход игроку
+                    if (!hit) {
+                        this.currentPlayer = 'me';
+                        this.updateGamePhase();
+                    }
+                }
+            }
+            
+            isAlreadyShot(row, col, shots) {
+                return shots.some(shot => shot.row === row && shot.col === col);
+            }
+            
+            checkGameOver() {
+                // Проверяем, все ли корабли игрока потоплены
+                const myShipsSunk = this.myShips.every(ship => ship.hits.every(h => h));
+                const opponentShipsSunk = this.opponentShips.every(ship => ship.hits.every(h => h));
+                
+                return myShipsSunk || opponentShipsSunk;
+            }
+            
+            updateGamePhase() {
+                const phaseElement = document.getElementById('gamePhase');
+                
+                switch (this.gamePhase) {
+                    case 'setup':
+                        phaseElement.textContent = 'Фаза расстановки кораблей';
+                        break;
+                    case 'battle':
+                        phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Противника'}`;
+                        break;
+                    case 'gameover':
+                        phaseElement.textContent = 'Игра завершена';
+                        break;
+                }
+                
+                // Обновляем активного игрока
+                document.getElementById('playerMe').classList.toggle('active', this.currentPlayer === 'me');
+                document.getElementById('playerOpponent').classList.toggle('active', this.currentPlayer === 'opponent');
+            }
+            
+            updateScores() {
+                const myAliveShips = this.myShips.filter(ship => !ship.hits.every(h => h)).length;
+                const opponentAliveShips = this.opponentShips.filter(ship => !ship.hits.every(h => h)).length;
+                
+                document.getElementById('scoreMe').textContent = `${myAliveShips} кораблей`;
+                document.getElementById('scoreOpponent').textContent = `${opponentAliveShips} кораблей`;
+            }
+            
+            drawBoards() {
+                this.drawBoard(this.myCtx, this.myBoardCanvas, this.myBoard, this.myShips, true);
+                this.drawBoard(this.opponentCtx, this.opponentBoardCanvas, this.opponentBoard, this.opponentShips, false);
+            }
+            
+            drawBoard(ctx, canvas, board, ships, showShips) {
+                const hexSize = this.getHexSize(canvas);
+                const hexHeight = hexSize * Math.sqrt(3);
+                const hexWidth = hexSize * 2;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Рисуем сетку
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const x = col * hexWidth * 0.75 + hexWidth / 2;
+                        const y = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        
+                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips);
+                    }
+                }
+                
+                // Если фаза расстановки и выбран корабль, показываем предварительное размещение
+                if (this.gamePhase === 'setup' && this.selectedShip && showShips) {
+                    const rect = canvas.getBoundingClientRect();
+                    const mouseX = rect.width / 2;
+                    const mouseY = rect.height / 2;
+                    
+                    const hex = this.getHexAtPosition(mouseX, mouseY, canvas);
+                    if (hex) {
+                        const positions = this.getShipPositions(hex.row, hex.col, this.selectedShip.size, this.shipOrientation);
+                        if (positions) {
+                            let valid = true;
+                            for (const pos of positions) {
+                                if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
+                                    valid = false;
+                                    break;
+                                }
+                            }
+                            
+                            ctx.globalAlpha = 0.7;
+                            for (const pos of positions) {
+                                const x = pos.col * hexWidth * 0.75 + hexWidth / 2;
+                                const y = pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
+                                this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips);
+                            }
+                            ctx.globalAlpha = 1.0;
+                        }
+                    }
+                }
+            }
+            
+            drawHex(ctx, x, y, hexSize, state, showShips) {
+                // Рисуем шестиугольник
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 3 * i;
+                    const hexX = x + hexSize * Math.cos(angle);
+                    const hexY = y + hexSize * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(hexX, hexY);
+                    else ctx.lineTo(hexX, hexY);
+                }
+                ctx.closePath();
+                
+                // Заливка в зависимости от состояния
+                switch (state) {
+                    case 'ship':
+                        if (showShips) {
+                            ctx.fillStyle = '#4CAF50';
+                        } else {
+                            ctx.fillStyle = 'rgba(0, 0, 50, 0.7)';
+                        }
+                        break;
+                    case 'hit':
+                        ctx.fillStyle = '#FF5252';
+                        break;
+                    case 'miss':
+                        ctx.fillStyle = '#2196F3';
+                        break;
+                    case 'ship-preview':
+                        ctx.fillStyle = 'rgba(76, 175, 80, 0.5)';
+                        break;
+                    case 'invalid-preview':
+                        ctx.fillStyle = 'rgba(255, 82, 82, 0.5)';
+                        break;
+                    default:
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                }
+                
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Если попадание, рисуем крестик
+                if (state === 'hit') {
+                    ctx.strokeStyle = '#FFF';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(x - hexSize * 0.3, y - hexSize * 0.3);
+                    ctx.lineTo(x + hexSize * 0.3, y + hexSize * 0.3);
+                    ctx.moveTo(x + hexSize * 0.3, y - hexSize * 0.3);
+                    ctx.lineTo(x - hexSize * 0.3, y + hexSize * 0.3);
+                    ctx.stroke();
+                }
+                
+                // Если промах, рисуем точку
+                if (state === 'miss') {
+                    ctx.fillStyle = '#2196F3';
+                    ctx.beginPath();
+                    ctx.arc(x, y, hexSize * 0.1, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ
+            createOnlineGame() {
+                this.isOnline = true;
+                this.isHost = true;
+                
+                this.peer = new Peer({
+                    host: '0.peerjs.com',
+                    port: 443,
+                    path: '/',
+                    pingInterval: 5000
+                });
+                
+                this.peer.on('open', (id) => {
+                    this.roomId = id;
+                    this.updateConnectionStatus(`Комната создана! ID: ${id}`, 'success');
+                    document.getElementById('roomInfo').innerHTML = `ID комнаты: <strong>${id}</strong><br>Ожидаем подключения...`;
+                    document.getElementById('roomInfo').style.display = 'block';
+                });
+                
+                this.peer.on('connection', (conn) => {
+                    this.connection = conn;
+                    this.setupConnection();
+                    this.updateConnectionStatus('Игрок подключен!', 'success');
+                });
+                
+                this.peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    this.updateConnectionStatus('Ошибка подключения: ' + err.type, 'error');
+                });
+            }
+            
+            joinOnlineGame() {
+                const roomId = document.getElementById('roomIdInput').value.trim();
+                if (!roomId) {
+                    alert('Введите ID комнаты');
+                    return;
+                }
+                
+                this.isOnline = true;
+                this.isHost = false;
+                
+                this.peer = new Peer({
+                    host: '0.peerjs.com',
+                    port: 443,
+                    path: '/',
+                    pingInterval: 5000
+                });
+                
+                this.peer.on('open', (id) => {
+                    this.roomId = roomId;
+                    this.connection = this.peer.connect(roomId);
+                    this.setupConnection();
+                    this.updateConnectionStatus('Подключаемся к комнате...', 'info');
+                });
+                
+                this.peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    this.updateConnectionStatus('Ошибка подключения: ' + err.type, 'error');
+                });
+            }
+            
+            setupConnection() {
+                this.connection.on('open', () => {
+                    this.updateConnectionStatus('Подключено!', 'success');
+                    if (!this.isHost) {
+                        // Запрос текущего состояния у хоста
+                        this.sendData({ type: 'request_state' });
+                    }
+                });
+                
+                this.connection.on('data', (data) => {
+                    this.handleOnlineData(data);
+                });
+                
+                this.connection.on('close', () => {
+                    this.updateConnectionStatus('Соединение разорвано', 'error');
+                    this.leaveOnlineGame();
+                });
+                
+                this.connection.on('error', (err) => {
+                    console.error('Connection error:', err);
+                    this.updateConnectionStatus('Ошибка соединения', 'error');
+                });
+            }
+            
+            handleOnlineData(data) {
+                console.log("Получены данные:", data);
+                
+                switch (data.type) {
+                    case 'ready':
+                        if (this.isHost) {
+                            this.opponentShips = data.ships;
+                            this.sendData({
+                                type: 'game_state',
+                                ships: this.myShips,
+                                gamePhase: this.gamePhase
+                            });
+                        }
+                        break;
+                        
+                    case 'game_state':
+                        this.opponentShips = data.ships;
+                        this.gamePhase = data.gamePhase;
+                        this.updateGamePhase();
+                        this.drawBoards();
+                        break;
+                        
+                    case 'start_battle':
+                        this.startBattle();
+                        break;
+                        
+                    case 'shot':
+                        this.receiveShot(data.row, data.col);
+                        break;
+                        
+                    case 'shot_result':
+                        this.opponentBoard[data.row][data.col] = data.hit ? 'hit' : 'miss';
+                        
+                        if (data.sunkShip) {
+                            // Помечаем потопленный корабль
+                            this.opponentShips.forEach(ship => {
+                                if (ship.typeIndex === data.sunkShip.typeIndex && 
+                                    ship.instance === data.sunkShip.instance) {
+                                    ship.hits = data.sunkShip.hits;
+                                }
+                            });
+                        }
+                        
+                        this.drawBoards();
+                        this.updateScores();
+                        
+                        if (!data.hit) {
+                            this.currentPlayer = 'me';
+                            this.updateGamePhase();
+                        }
+                        break;
+                        
+                    case 'request_state':
+                        if (this.isHost) {
+                            this.sendData({
+                                type: 'game_state',
+                                ships: this.myShips,
+                                gamePhase: this.gamePhase
+                            });
+                        }
+                        break;
+                }
+            }
+            
+            sendData(data) {
+                if (this.connection && this.connection.open) {
+                    this.connection.send(data);
+                    return true;
+                } else {
+                    console.warn("Соединение не открыто, данные не отправлены");
+                    this.updateConnectionStatus("Ошибка: нет соединения", "error");
+                    return false;
+                }
+            }
+            
+            updateConnectionStatus(message, type) {
+                const statusElement = document.getElementById('connectionStatus');
+                statusElement.textContent = message;
+                statusElement.style.display = 'block';
+                statusElement.style.background = type === 'success' ? 'rgba(212, 237, 218, 0.2)' : 
+                                               type === 'error' ? 'rgba(248, 215, 218, 0.2)' : 'rgba(209, 236, 241, 0.2)';
+                statusElement.style.color = type === 'success' ? '#d4edda' : 
+                                           type === 'error' ? '#f8d7da' : '#d1ecf1';
+            }
+            
+            leaveOnlineGame() {
+                if (this.connection) {
+                    this.connection.close();
+                }
+                if (this.peer) {
+                    this.peer.destroy();
+                }
+                this.isOnline = false;
+                this.initializeGame();
+            }
+        }
+
+        // Глобальные функции для кнопок HTML
+        function createOnlineGame() {
+            const game = document.querySelector('script')._gameInstance;
+            if (game) {
+                game.createOnlineGame();
+            }
+        }
+
+        function joinOnlineGame() {
+            const game = document.querySelector('script')._gameInstance;
+            if (game) {
+                game.joinOnlineGame();
+            }
+        }
+
+        // Инициализация игры
+        document.addEventListener('DOMContentLoaded', () => {
+            const game = new HexagonalBattleship();
+            document.querySelector('script')._gameInstance = game;
+        });
+    </script>
+</body>
+</html>
