@@ -471,7 +471,7 @@
                 document.getElementById('rotateRight').addEventListener('click', () => this.rotateRight());
                 
                 document.addEventListener('keydown', (e) => {
-                    if (e.key === 'r' || e.key === 'к' || e.key === 'R' || e.key === 'К') {
+                    if (e.key === 'r' || e.key === 'к' || e.key === 'R' || e.key === 'Й') {
                         this.rotateRight();
                     }
                     if (e.key === 'q' || e.key === 'й' || e.key === 'Q' || e.key === 'Й') {
@@ -652,10 +652,6 @@
                 // Преобразуем координаты точки относительно центра гекса
                 const dx = (x - hexX) / hexSize;
                 const dy = (y - hexY) / hexSize;
-                
-                // Упрощенная проверка для гексагона
-                // Гекс можно представить как |x| + |y| <= 1 в нормализованных координатах
-                // Но для правильного гекса нужно использовать другую формулу
                 
                 const absDx = Math.abs(dx);
                 const absDy = Math.abs(dy);
@@ -1109,7 +1105,7 @@
                         const x = col * hexWidth * 0.75 + hexWidth / 2;
                         const y = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
-                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips);
+                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips, row, col);
                     }
                 }
                 
@@ -1123,14 +1119,15 @@
                         for (const pos of positions) {
                             const x = pos.col * hexWidth * 0.75 + hexWidth / 2;
                             const y = pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
-                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips);
+                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col);
                         }
                         ctx.globalAlpha = 1.0;
                     }
                 }
             }
             
-            drawHex(ctx, x, y, hexSize, state, showShips) {
+            drawHex(ctx, x, y, hexSize, state, showShips, row, col) {
+                // Рисуем шестиугольник
                 ctx.beginPath();
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 3 * i;
@@ -1169,6 +1166,16 @@
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = 1;
                 ctx.stroke();
+                
+                // Рисуем координаты клетки мелким шрифтом
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.font = `${Math.max(8, hexSize * 0.2)}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Отображаем row и col
+                const coordText = `${row},${col}`;
+                ctx.fillText(coordText, x, y);
                 
                 if (state === 'hit') {
                     ctx.strokeStyle = '#FFF';
