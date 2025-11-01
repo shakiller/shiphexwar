@@ -136,6 +136,7 @@
             padding: 15px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.1);
             backdrop-filter: blur(10px);
+            position: relative;
         }
 
         .board-title {
@@ -246,6 +247,17 @@
             display: none;
         }
 
+        .mouse-coords {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 0.7em;
+            color: white;
+        }
+
         /* Медиа-запросы для мобильных устройств */
         @media (max-width: 768px) {
             .game-boards {
@@ -326,10 +338,12 @@
         <div class="game-boards">
             <div class="board-container">
                 <div class="board-title">Ваше поле</div>
+                <div class="mouse-coords" id="myBoardCoords">x: 0, y: 0</div>
                 <canvas id="myBoard" width="500" height="500"></canvas>
             </div>
             <div class="board-container">
                 <div class="board-title">Поле противника</div>
+                <div class="mouse-coords" id="opponentBoardCoords">x: 0, y: 0</div>
                 <canvas id="opponentBoard" width="500" height="500"></canvas>
             </div>
         </div>
@@ -347,6 +361,11 @@
                 this.opponentBoardCanvas = document.getElementById('opponentBoard');
                 this.myCtx = this.myBoardCanvas.getContext('2d');
                 this.opponentCtx = this.opponentBoardCanvas.getContext('2d');
+                
+                // Переменные для отслеживания мыши
+                this.currentMouseX = 0;
+                this.currentMouseY = 0;
+                this.lastHoveredHex = null;
                 
                 // Настройки игры
                 this.boardSize = 8;
@@ -397,6 +416,7 @@
                 this.gamePhase = 'setup';
                 this.selectedShip = null;
                 this.shipOrientation = 0;
+                this.lastHoveredHex = null;
                 
                 this.updateGamePhase();
                 this.updateScores();
@@ -408,12 +428,40 @@
             }
             
             setupEventListeners() {
+                // Обработчики кликов
                 this.myBoardCanvas.addEventListener('click', (e) => this.handleMyBoardClick(e));
                 this.opponentBoardCanvas.addEventListener('click', (e) => this.handleOpponentBoardClick(e));
                 
-                // Добавляем отслеживание движения мыши для предпросмотра
-                this.myBoardCanvas.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+                // Обработчики движения мыши для предпросмотра
+                this.myBoardCanvas.addEventListener('mousemove', (e) => {
+                    const rect = this.myBoardCanvas.getBoundingClientRect();
+                    this.currentMouseX = e.clientX - rect.left;
+                    this.currentMouseY = e.clientY - rect.top;
+                    
+                    // Обновляем координаты на дисплее
+                    document.getElementById('myBoardCoords').textContent = 
+                        `x: ${Math.floor(this.currentMouseX)}, y: ${Math.floor(this.currentMouseY)}`;
+                    
+                    this.handleMouseMove(this.currentMouseX, this.currentMouseY, this.myBoardCanvas);
+                });
                 
+                this.opponentBoardCanvas.addEventListener('mousemove', (e) => {
+                    const rect = this.opponentBoardCanvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    // Обновляем координаты на дисплее
+                    document.getElementById('opponentBoardCoords').textContent = 
+                        `x: ${Math.floor(x)}, y: ${Math.floor(y)}`;
+                });
+                
+                // Убираем предпросмотр при уходе мыши с поля
+                this.myBoardCanvas.addEventListener('mouseleave', () => {
+                    this.lastHoveredHex = null;
+                    this.drawBoards();
+                });
+
+                // Остальные обработчики
                 document.getElementById('modeLocal').addEventListener('click', () => this.setGameMode('local'));
                 document.getElementById('modeOnline').addEventListener('click', () => this.setGameMode('online'));
                 document.getElementById('randomShips').addEventListener('click', () => this.randomizeShips());
@@ -436,8 +484,18 @@
                 });
             }
             
+            handleMouseMove(x, y, canvas) {
+                if (this.gamePhase !== 'setup' || !this.selectedShip) return;
+                
+                const hex = this.getHexAtPosition(x, y, canvas);
+                if (hex && (this.lastHoveredHex === null || hex.row !== this.lastHoveredHex.row || hex.col !== this.lastHoveredHex.col)) {
+                    this.lastHoveredHex = hex;
+                    this.drawBoards();
+                }
+            }
+            
             rotateLeft() {
-                this.shipOrientation = (this.shipOrientation + 5) % 6; // +5 вместо -1 для корректного перехода
+                this.shipOrientation = (this.shipOrientation + 5) % 6;
                 this.updateRotationInfo();
                 this.drawBoards();
             }
@@ -495,12 +553,6 @@
                 });
             }
             
-            handleMouseMove(event) {
-                if (this.gamePhase !== 'setup' || !this.selectedShip) return;
-                
-                this.drawBoards();
-            }
-            
             handleMyBoardClick(event) {
                 if (this.gamePhase !== 'setup') return;
                 
@@ -513,7 +565,10 @@
                 // Отладочная информация
                 const debugInfo = document.getElementById('debugInfo');
                 if (hex) {
-                    debugInfo.textContent = `Клик: x=${x.toFixed(1)}, y=${y.toFixed(1)} -> row=${hex.row}, col=${hex.col}`;
+                    debugInfo.textContent = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> row=${hex.row}, col=${hex.col}`;
+                    debugInfo.style.display = 'block';
+                } else {
+                    debugInfo.textContent = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
                 }
                 
@@ -528,6 +583,7 @@
                             }
                             
                             this.selectedShip = null;
+                            this.lastHoveredHex = null;
                             this.drawBoards();
                             this.updateScores();
                             
@@ -561,7 +617,10 @@
                 // Отладочная информация
                 const debugInfo = document.getElementById('debugInfo');
                 if (hex) {
-                    debugInfo.textContent = `Выстрел: x=${x.toFixed(1)}, y=${y.toFixed(1)} -> row=${hex.row}, col=${hex.col}`;
+                    debugInfo.textContent = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)} -> row=${hex.row}, col=${hex.col}`;
+                    debugInfo.style.display = 'block';
+                } else {
+                    debugInfo.textContent = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
                 }
                 
@@ -575,7 +634,7 @@
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Более точный алгоритм определения гекса
+                // Проходим по всем гексам и проверяем попадание
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         const hexX = col * hexWidth * 0.75 + hexWidth / 2;
@@ -591,17 +650,18 @@
             
             isPointInHex(x, y, hexX, hexY, hexSize) {
                 // Преобразуем координаты точки относительно центра гекса
-                const dx = Math.abs(x - hexX);
-                const dy = Math.abs(y - hexY);
-                const hexHeight = hexSize * Math.sqrt(3);
+                const dx = (x - hexX) / hexSize;
+                const dy = (y - hexY) / hexSize;
                 
-                // Проверяем, находится ли точка внутри гекса
-                // Гекс можно представить как 6 треугольников
-                if (dx > hexSize * 0.75) return false;
-                if (dy > hexHeight / 2) return false;
+                // Упрощенная проверка для гексагона
+                // Гекс можно представить как |x| + |y| <= 1 в нормализованных координатах
+                // Но для правильного гекса нужно использовать другую формулу
                 
-                // Проверяем границы гекса
-                return (hexSize * hexHeight / 2 - hexSize * dy - hexHeight * dx / 2) >= 0;
+                const absDx = Math.abs(dx);
+                const absDy = Math.abs(dy);
+                
+                // Проверка попадания в гекс (аппроксимация)
+                return (absDx <= 0.5) && (absDy <= 0.866) && (absDx * 1.732 + absDy <= 1.732);
             }
             
             getHexSize(canvas) {
@@ -1054,27 +1114,18 @@
                 }
                 
                 // Рисуем предпросмотр корабля
-                if (this.gamePhase === 'setup' && this.selectedShip && showShips) {
-                    const rect = canvas.getBoundingClientRect();
-                    
-                    // Используем последнюю позицию мыши для предпросмотра
-                    const mouseX = rect.width / 2;
-                    const mouseY = rect.height / 2;
-                    
-                    const hex = this.getHexAtPosition(mouseX, mouseY, canvas);
-                    if (hex) {
-                        const positions = this.getShipPositions(hex.row, hex.col, this.selectedShip.size, this.shipOrientation);
-                        if (positions) {
-                            let valid = this.canPlaceShip(positions);
-                            
-                            ctx.globalAlpha = 0.6;
-                            for (const pos of positions) {
-                                const x = pos.col * hexWidth * 0.75 + hexWidth / 2;
-                                const y = pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
-                                this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips);
-                            }
-                            ctx.globalAlpha = 1.0;
+                if (this.gamePhase === 'setup' && this.selectedShip && showShips && this.lastHoveredHex) {
+                    const positions = this.getShipPositions(this.lastHoveredHex.row, this.lastHoveredHex.col, this.selectedShip.size, this.shipOrientation);
+                    if (positions) {
+                        let valid = this.canPlaceShip(positions);
+                        
+                        ctx.globalAlpha = 0.6;
+                        for (const pos of positions) {
+                            const x = pos.col * hexWidth * 0.75 + hexWidth / 2;
+                            const y = pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
+                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips);
                         }
+                        ctx.globalAlpha = 1.0;
                     }
                 }
             }
