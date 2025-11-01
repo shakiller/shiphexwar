@@ -634,9 +634,13 @@
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Проходим по всем гексам и проверяем попадание
-                for (let row = 0; row < this.boardSize; row++) {
-                    for (let col = 0; col < this.boardSize; col++) {
+                // Сначала определяем приблизительную позицию в сетке
+                const approxCol = Math.floor(x / (hexWidth * 0.75));
+                const approxRow = Math.floor((y - (approxCol % 2) * hexHeight / 2) / hexHeight);
+                
+                // Проверяем центральную ячейку и соседние
+                for (let row = Math.max(0, approxRow - 1); row <= Math.min(this.boardSize - 1, approxRow + 1); row++) {
+                    for (let col = Math.max(0, approxCol - 1); col <= Math.min(this.boardSize - 1, approxCol + 1); col++) {
                         const hexX = col * hexWidth * 0.75 + hexWidth / 2;
                         const hexY = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
@@ -645,19 +649,22 @@
                         }
                     }
                 }
+                
                 return null;
             }
             
             isPointInHex(x, y, hexX, hexY, hexSize) {
                 // Преобразуем координаты точки относительно центра гекса
-                const dx = (x - hexX) / hexSize;
-                const dy = (y - hexY) / hexSize;
+                const dx = Math.abs(x - hexX);
+                const dy = Math.abs(y - hexY);
+                const hexHeight = hexSize * Math.sqrt(3);
                 
-                const absDx = Math.abs(dx);
-                const absDy = Math.abs(dy);
+                // Проверяем границы гекса
+                if (dx > hexSize * 0.75) return false;
+                if (dy > hexHeight / 2) return false;
                 
-                // Проверка попадания в гекс (аппроксимация)
-                return (absDx <= 0.5) && (absDy <= 0.866) && (absDx * 1.732 + absDy <= 1.732);
+                // Проверяем наклонные границы
+                return (hexSize * hexHeight / 2 - hexSize * dy - hexHeight * dx / 2) >= 0;
             }
             
             getHexSize(canvas) {
