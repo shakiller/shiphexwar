@@ -553,57 +553,37 @@
                 });
             }
             
-            handleMyBoardClick(event) {
-                if (this.gamePhase !== 'setup') return;
-                
-                const rect = this.myBoardCanvas.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
-                
-                const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
-                
-                // Отладочная информация
-                const debugInfo = document.getElementById('debugInfo');
-                if (hex) {
-                    debugInfo.textContent = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> row=${hex.row}, col=${hex.col}`;
-                    debugInfo.style.display = 'block';
-                } else {
-                    debugInfo.textContent = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
-                    debugInfo.style.display = 'block';
-                }
-                
-                if (hex) {
-                    // Если выбран корабль - пытаемся разместить
-                    if (this.selectedShip) {
-                        if (this.placeShip(hex.row, hex.col, this.selectedShip, this.shipOrientation)) {
-                            const shipElement = document.querySelector(`.ship[data-ship-index="${this.selectedShip.typeIndex}"][data-ship-instance="${this.selectedShip.instance}"]`);
-                            if (shipElement) {
-                                shipElement.classList.add('placed');
-                                shipElement.classList.remove('selected');
-                            }
-                            
-                            this.selectedShip = null;
-                            this.lastHoveredHex = null;
-                            this.drawBoards();
-                            this.updateScores();
-                            
-                            if (this.allShipsPlaced()) {
-                                document.getElementById('startGame').style.display = 'block';
-                                
-                                if (this.isOnline && this.isHost) {
-                                    this.sendData({
-                                        type: 'ready',
-                                        ships: this.myShips
-                                    });
-                                }
-                            }
-                        }
-                    } else {
-                        // Если корабль не выбран - пытаемся удалить существующий
-                        this.removeShipAt(hex.row, hex.col);
-                    }
-                }
-            }
+handleMyBoardClick(event) {
+    if (this.gamePhase !== 'setup') return;
+    
+    const rect = this.myBoardCanvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    
+    const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
+    
+    // Детальная отладочная информация
+    const debugInfo = document.getElementById('debugInfo');
+    if (hex) {
+        const hexSize = this.getHexSize(this.myBoardCanvas);
+        const hexHeight = hexSize * Math.sqrt(3);
+        const hexWidth = hexSize * 2;
+        const offsetX = (this.myBoardCanvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+        const offsetY = (this.myBoardCanvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+        const hexX = offsetX + hex.col * hexWidth * 0.75 + hexWidth / 2;
+        const hexY = offsetY + hex.row * hexHeight + (hex.col % 2) * hexHeight / 2 + hexHeight / 2;
+        
+        debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
+                              Ячейка: row=${hex.row}, col=${hex.col}<br>
+                              Центр гекса: x=${Math.floor(hexX)}, y=${Math.floor(hexY)}<br>
+                              Расстояние: ${Math.floor(Math.sqrt((x-hexX)**2 + (y-hexY)**2))}px`;
+        debugInfo.style.display = 'block';
+    } else {
+        debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
+        debugInfo.style.display = 'block';
+    }
+    
+  
             
             handleOpponentBoardClick(event) {
                 if (this.gamePhase !== 'battle' || this.currentPlayer !== 'me') return;
