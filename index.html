@@ -689,23 +689,23 @@
                 this.drawBoards();
             }
             
-            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ (из крестиков-ноликов)
+            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - синхронизирован с отрисовкой
             getHexAtPosition(x, y, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Используем тот же алгоритм, что и в крестиках-ноликах
-                const gridX = Math.floor(x / (hexWidth * 0.75));
-                const gridY = Math.floor((y - (gridX % 2) * hexHeight / 2) / hexHeight);
+                // ТОЧНО ТАКИЕ ЖЕ ФОРМУЛЫ КАК В drawBoard!
+                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
-                // Проверяем соседние ячейки для точного определения
-                for (let row = Math.max(0, gridY - 1); row <= Math.min(this.boardSize - 1, gridY + 1); row++) {
-                    for (let col = Math.max(0, gridX - 1); col <= Math.min(this.boardSize - 1, gridX + 1); col++) {
-                        const hexX = col * hexWidth * 0.75 + hexWidth / 2;
-                        const hexY = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                // Проверяем все ячейки в правильном порядке
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                        const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
-                        if (this.isPointInHex(x, y, hexX, hexY, hexSize, hexHeight)) {
+                        if (this.isPointInHex(x, y, hexX, hexY, hexSize)) {
                             return { row, col };
                         }
                     }
@@ -713,13 +713,18 @@
                 return null;
             }
             
-            // ИСПРАВЛЕННЫЙ МЕТОД ПРОВЕРКИ ПОПАДАНИЯ В ШЕСТИУГОЛЬНИК
-            isPointInHex(x, y, hexX, hexY, hexSize, hexHeight) {
+            // УПРОЩЕННАЯ И ТОЧНАЯ ПРОВЕРКА ПОПАДАНИЯ В ШЕСТИУГОЛЬНИК
+            isPointInHex(x, y, hexX, hexY, hexSize) {
+                // Преобразуем координаты в относительные к центру гекса
                 const dx = Math.abs(x - hexX);
                 const dy = Math.abs(y - hexY);
                 
-                if (dx > hexSize || dy > hexHeight / 2) return false;
-                return (hexHeight * hexSize - hexHeight * dx - hexSize * dy) >= 0;
+                // Простая и надежная проверка для шестиугольника
+                if (dx > hexSize * 0.75) return false;
+                if (dy > hexSize * 0.866) return false; // 0.866 = √3/2
+                
+                // Проверка по наклонным граням
+                return (dx * 0.57735 + dy <= hexSize * 0.866); // 0.57735 = 1/√3
             }
             
             getHexSize(canvas) {
