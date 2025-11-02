@@ -634,12 +634,13 @@
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Простой и надежный алгоритм - проверяем все гексы
+                // Проходим по всем гексам в правильном порядке
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         const hexX = col * hexWidth * 0.75 + hexWidth / 2;
                         const hexY = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
+                        // Проверяем попадание в гекс
                         if (this.isPointInHex(x, y, hexX, hexY, hexSize)) {
                             return { row, col };
                         }
@@ -650,23 +651,20 @@
             
             isPointInHex(x, y, hexX, hexY, hexSize) {
                 // Преобразуем координаты в относительные к центру гекса
-                const dx = (x - hexX) / hexSize;
-                const dy = (y - hexY) / hexSize;
+                const dx = Math.abs(x - hexX);
+                const dy = Math.abs(y - hexY);
+                const hexHeight = hexSize * Math.sqrt(3);
                 
-                // Упрощенная проверка для правильного шестиугольника
-                // Шестиугольник можно представить как пересечение 6 полуплоскостей
-                const absDx = Math.abs(dx);
-                const absDy = Math.abs(dy);
-                
-                // Основная проверка - точка должна находиться внутри ромба
-                if (absDx > 0.5 || absDy > 0.866) return false;
+                // Простая и надежная проверка для шестиугольника
+                if (dx > hexSize * 0.75) return false;
+                if (dy > hexHeight * 0.5) return false;
                 
                 // Проверка наклонных граней
-                return (0.866 * absDx + 0.5 * absDy <= 0.866);
+                return (dx * 0.577 + dy <= hexHeight * 0.5);
             }
             
             getHexSize(canvas) {
-                return Math.min(canvas.width, canvas.height) / (this.boardSize * 1.8);
+                return Math.min(canvas.width, canvas.height) / (this.boardSize * 2.2);
             }
             
             placeShip(row, col, ship, orientation) {
@@ -1105,10 +1103,14 @@
                 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
+                // Добавляем отступы для центрирования
+                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const x = col * hexWidth * 0.75 + hexWidth / 2;
-                        const y = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
                         this.drawHex(ctx, x, y, hexSize, board[row][col], showShips, row, col);
                     }
@@ -1122,8 +1124,8 @@
                         
                         ctx.globalAlpha = 0.6;
                         for (const pos of positions) {
-                            const x = pos.col * hexWidth * 0.75 + hexWidth / 2;
-                            const y = pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
+                            const x = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2;
+                            const y = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
                             this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col);
                         }
                         ctx.globalAlpha = 1.0;
@@ -1174,7 +1176,7 @@
                 
                 // Рисуем координаты клетки мелким шрифтом
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                ctx.font = `${Math.max(8, hexSize * 0.2)}px Arial`;
+                ctx.font = `${Math.max(8, hexSize * 0.15)}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
