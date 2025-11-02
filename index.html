@@ -259,6 +259,16 @@
             color: white;
         }
 
+        .last-click-info {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 8px;
+            border-radius: 5px;
+            margin-top: 8px;
+            font-size: 0.9em;
+            color: #FFD700;
+            border-left: 3px solid #FFD700;
+        }
+
         /* Медиа-запросы для мобильных устройств */
         @media (max-width: 768px) {
             .game-boards {
@@ -333,6 +343,12 @@
                 <!-- Корабли будут добавлены динамически -->
             </div>
             <div class="delete-hint">💡 Для удаления корабля кликните по нему на поле</div>
+            
+            <!-- Блок информации о последнем клике -->
+            <div class="last-click-info" id="lastClickInfo" style="display: none;">
+                Последняя нажатая клетка: <span id="lastClickCoords">-</span>
+            </div>
+            
             <div class="debug-info" id="debugInfo"></div>
         </div>
 
@@ -367,6 +383,10 @@
                 this.currentMouseX = 0;
                 this.currentMouseY = 0;
                 this.lastHoveredHex = null;
+                
+                // Переменные для подсветки последнего клика
+                this.lastClickedHexMyBoard = null;
+                this.lastClickedHexOpponentBoard = null;
                 
                 // Настройки игры
                 this.boardSize = 8;
@@ -418,10 +438,13 @@
                 this.selectedShip = null;
                 this.shipOrientation = 0;
                 this.lastHoveredHex = null;
+                this.lastClickedHexMyBoard = null;
+                this.lastClickedHexOpponentBoard = null;
                 
                 this.updateGamePhase();
                 this.updateScores();
                 this.updateRotationInfo();
+                this.updateLastClickInfo();
                 this.drawBoards();
                 this.createShipPalette();
                 
@@ -512,6 +535,28 @@
                 rotationInfo.textContent = `Направление: ${this.directionNames[this.shipOrientation]}`;
             }
             
+            updateLastClickInfo() {
+                const lastClickInfo = document.getElementById('lastClickInfo');
+                const lastClickCoords = document.getElementById('lastClickCoords');
+                
+                let infoText = '';
+                
+                if (this.lastClickedHexMyBoard) {
+                    infoText += `Ваше поле: [${this.lastClickedHexMyBoard.row},${this.lastClickedHexMyBoard.col}] `;
+                }
+                
+                if (this.lastClickedHexOpponentBoard) {
+                    infoText += `Поле противника: [${this.lastClickedHexOpponentBoard.row},${this.lastClickedHexOpponentBoard.col}]`;
+                }
+                
+                if (infoText) {
+                    lastClickCoords.textContent = infoText;
+                    lastClickInfo.style.display = 'block';
+                } else {
+                    lastClickInfo.style.display = 'none';
+                }
+            }
+            
             setGameMode(mode) {
                 this.isOnline = mode === 'online';
                 document.getElementById('onlineLobby').style.display = this.isOnline ? 'block' : 'none';
@@ -570,6 +615,10 @@
                                           Ячейка: строка=${hex.row}, столбец=${hex.col}`;
                     debugInfo.style.display = 'block';
                     
+                    // Сохраняем последний клик
+                    this.lastClickedHexMyBoard = hex;
+                    this.updateLastClickInfo();
+                    
                     // Если выбран корабль - пытаемся разместить
                     if (this.selectedShip) {
                         if (this.placeShip(hex.row, hex.col, this.selectedShip, this.shipOrientation)) {
@@ -605,6 +654,8 @@
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
                 }
+                
+                this.drawBoards();
             }
             
             handleOpponentBoardClick(event) {
@@ -622,6 +673,10 @@
                     debugInfo.innerHTML = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
                                           Ячейка: строка=${hex.row}, столбец=${hex.col}`;
                     debugInfo.style.display = 'block';
+                    
+                    // Сохраняем последний клик
+                    this.lastClickedHexOpponentBoard = hex;
+                    this.updateLastClickInfo();
                 } else {
                     debugInfo.innerHTML = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
@@ -630,24 +685,27 @@
                 if (hex && !this.isAlreadyShot(hex.row, hex.col, this.myShots)) {
                     this.makeShot(hex.row, hex.col);
                 }
+                
+                this.drawBoards();
             }
             
+            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ (из крестиков-ноликов)
             getHexAtPosition(x, y, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // ВАЖНО: Используем те же формулы, что и в drawBoard
-                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                // Используем тот же алгоритм, что и в крестиках-ноликах
+                const gridX = Math.floor(x / (hexWidth * 0.75));
+                const gridY = Math.floor((y - (gridX % 2) * hexHeight / 2) / hexHeight);
                 
-                for (let row = 0; row < this.boardSize; row++) {
-                    for (let col = 0; col < this.boardSize; col++) {
-                        // Точные координаты центра гекса (как в drawBoard)
-                        const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                // Проверяем соседние ячейки для точного определения
+                for (let row = Math.max(0, gridY - 1); row <= Math.min(this.boardSize - 1, gridY + 1); row++) {
+                    for (let col = Math.max(0, gridX - 1); col <= Math.min(this.boardSize - 1, gridX + 1); col++) {
+                        const hexX = col * hexWidth * 0.75 + hexWidth / 2;
+                        const hexY = row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
-                        if (this.isPointInHex(x, y, hexX, hexY, hexSize)) {
+                        if (this.isPointInHex(x, y, hexX, hexY, hexSize, hexHeight)) {
                             return { row, col };
                         }
                     }
@@ -655,17 +713,13 @@
                 return null;
             }
             
-            isPointInHex(x, y, hexX, hexY, hexSize) {
-                // Преобразуем координаты в относительные к центру гекса
+            // ИСПРАВЛЕННЫЙ МЕТОД ПРОВЕРКИ ПОПАДАНИЯ В ШЕСТИУГОЛЬНИК
+            isPointInHex(x, y, hexX, hexY, hexSize, hexHeight) {
                 const dx = Math.abs(x - hexX);
                 const dy = Math.abs(y - hexY);
                 
-                // Более точная проверка для шестиугольника
-                if (dx > hexSize * 0.75) return false;
-                if (dy > hexSize * 0.866) return false; // 0.866 = √3/2
-                
-                // Проверка по наклонным граням
-                return (dx * 0.57735 + dy <= hexSize * 0.866); // 0.57735 = 1/√3
+                if (dx > hexSize || dy > hexHeight / 2) return false;
+                return (hexHeight * hexSize - hexHeight * dx - hexSize * dy) >= 0;
             }
             
             getHexSize(canvas) {
@@ -1117,7 +1171,14 @@
                         const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
                         const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
-                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips, row, col);
+                        // Проверяем, является ли эта ячейка последней нажатой
+                        const isLastClicked = 
+                            (showShips && this.lastClickedHexMyBoard && 
+                             this.lastClickedHexMyBoard.row === row && this.lastClickedHexMyBoard.col === col) ||
+                            (!showShips && this.lastClickedHexOpponentBoard && 
+                             this.lastClickedHexOpponentBoard.row === row && this.lastClickedHexOpponentBoard.col === col);
+                        
+                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips, row, col, isLastClicked);
                     }
                 }
                 
@@ -1131,14 +1192,14 @@
                         for (const pos of positions) {
                             const x = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2;
                             const y = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
-                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col);
+                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
                     }
                 }
             }
             
-            drawHex(ctx, x, y, hexSize, state, showShips, row, col) {
+            drawHex(ctx, x, y, hexSize, state, showShips, row, col, isLastClicked) {
                 // Рисуем шестиугольник
                 ctx.beginPath();
                 for (let i = 0; i < 6; i++) {
@@ -1149,6 +1210,12 @@
                     else ctx.lineTo(hexX, hexY);
                 }
                 ctx.closePath();
+                
+                // Подсветка последней нажатой ячейки
+                if (isLastClicked) {
+                    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; // Золотистая подсветка
+                    ctx.fill();
+                }
                 
                 switch (state) {
                     case 'ship':
@@ -1174,13 +1241,17 @@
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
                 }
                 
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.lineWidth = 1;
+                // Если это не последняя нажатая ячейка, заливаем обычным цветом
+                if (!isLastClicked) {
+                    ctx.fill();
+                }
+                
+                ctx.strokeStyle = isLastClicked ? '#FFD700' : 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = isLastClicked ? 3 : 1;
                 ctx.stroke();
                 
                 // Рисуем координаты клетки мелким шрифтом
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.fillStyle = isLastClicked ? '#FFD700' : 'rgba(255, 255, 255, 0.7)';
                 ctx.font = `${Math.max(8, hexSize * 0.15)}px Arial`;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
