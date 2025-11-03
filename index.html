@@ -632,67 +632,44 @@
                 });
             }
             
-            // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА
-            getHexCenter(row, col, canvas) {
+            // ПРОСТОЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
+            getHexAtPosition(x, y, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
+                // Вычисляем отступы как в drawBoard
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-                
-                const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
-                
-                return { x, y, hexSize };
-            }
-            
-            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
-            getHexAtPosition(x, y, canvas) {
-                let closestHex = null;
-                let minDistance = Infinity;
-                
-                // Проверяем все ячейки
+
+                // ПРОСТОЙ ПЕРЕБОР ВСЕХ ЯЧЕЕК
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const center = this.getHexCenter(row, col, canvas);
-                        const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
+                        // ВЫЧИСЛЯЕМ КООРДИНАТЫ ЦЕНТРА ТОЧНО КАК В drawBoard
+                        const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                        const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
-                        // Расстояние должно быть меньше радиуса гекса
-                        if (distance < center.hexSize * 0.9) {
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                closestHex = { 
-                                    row, 
-                                    col, 
-                                    hexX: center.x, 
-                                    hexY: center.y,
-                                    distance: distance
-                                };
-                            }
+                        // ПРОСТАЯ ПРОВЕРКА РАССТОЯНИЯ
+                        const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+                        
+                        // Увеличим радиус определения для надежности
+                        if (distance < hexSize * 1.2) {
+                            document.getElementById('coordsInfo').textContent = 
+                                `Ячейка [${row},${col}] | Центр: [${Math.floor(centerX)},${Math.floor(centerY)}] | ` +
+                                `Клик: [${Math.floor(x)},${Math.floor(y)}] | Расстояние: ${Math.floor(distance)}`;
+                            return { row, col, hexX: centerX, hexY: centerY, distance };
                         }
                     }
                 }
                 
-                // ОТЛАДКА: показываем информацию о найденной ячейке
-                if (closestHex) {
-                    document.getElementById('coordsInfo').textContent = 
-                        `Найдена ячейка [${closestHex.row},${closestHex.col}] | ` +
-                        `Центр: [${Math.floor(closestHex.hexX)},${Math.floor(closestHex.hexY)}] | ` +
-                        `Клик: [${Math.floor(x)},${Math.floor(y)}] | ` +
-                        `Расстояние: ${Math.floor(closestHex.distance)}`;
-                } else {
-                    document.getElementById('coordsInfo').textContent = 
-                        `Клик: [${Math.floor(x)},${Math.floor(y)}] | ЯЧЕЙКА НЕ НАЙДЕНА`;
-                }
-                
-                return closestHex;
+                document.getElementById('coordsInfo').textContent = 
+                    `Клик: [${Math.floor(x)},${Math.floor(y)}] | ЯЧЕЙКА НЕ НАЙДЕНА`;
+                return null;
             }
             
             getHexSize(canvas) {
-                // Фиксированный размер, чтобы не менялся при разных вычислениях
-                const baseSize = Math.min(canvas.width, canvas.height);
-                return baseSize / (this.boardSize * 2.1);
+                // ФИКСИРОВАННЫЙ РАЗМЕР для точности
+                return 30;
             }
             
             handleMyBoardClick(event) {
@@ -1222,41 +1199,59 @@
             }
             
             drawBoard(ctx, canvas, board, ships, showShips) {
+                const hexSize = this.getHexSize(canvas);
+                const hexHeight = hexSize * Math.sqrt(3);
+                const hexWidth = hexSize * 2;
+                
+                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // ОТЛАДКА: рисуем информацию о размере
+                // ОТЛАДОЧНАЯ СЕТКА - показываем ВСЕ центры
                 if (this.showTouchZones) {
                     ctx.fillStyle = 'red';
-                    ctx.font = '12px Arial';
-                    ctx.textAlign = 'left';
-                    ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 10, 15);
+                    ctx.font = '10px Arial';
+                    ctx.textAlign = 'center';
+                    
+                    for (let row = 0; row < this.boardSize; row++) {
+                        for (let col = 0; col < this.boardSize; col++) {
+                            const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                            const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                            
+                            // Красная точка в центре
+                            ctx.beginPath();
+                            ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Зеленая зона клика
+                            ctx.strokeStyle = 'lime';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.arc(centerX, centerY, hexSize * 1.2, 0, Math.PI * 2);
+                            ctx.stroke();
+                            
+                            // Координаты
+                            ctx.fillStyle = 'yellow';
+                            ctx.fillText(`${row},${col}`, centerX, centerY - 10);
+                            ctx.fillStyle = 'red';
+                        }
+                    }
                 }
                 
+                // Теперь рисуем гексы поверх отладочной сетки
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const center = this.getHexCenter(row, col, canvas);
+                        const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                        const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        
                         const isLastClicked = 
                             (showShips && this.lastClickedHexMyBoard && 
                              this.lastClickedHexMyBoard.row === row && this.lastClickedHexMyBoard.col === col) ||
                             (!showShips && this.lastClickedHexOpponentBoard && 
                              this.lastClickedHexOpponentBoard.row === row && this.lastClickedHexOpponentBoard.col === col);
                         
-                        this.drawHex(ctx, center.x, center.y, center.hexSize, board[row][col], showShips, row, col, isLastClicked);
-                        
-                        // ОТЛАДКА: рисуем центры всех гексов
-                        if (this.showTouchZones) {
-                            ctx.fillStyle = 'lime';
-                            ctx.beginPath();
-                            ctx.arc(center.x, center.y, 3, 0, Math.PI * 2);
-                            ctx.fill();
-                            
-                            // Рисуем зоны клика
-                            ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
-                            ctx.lineWidth = 1;
-                            ctx.beginPath();
-                            ctx.arc(center.x, center.y, center.hexSize * 0.9, 0, Math.PI * 2);
-                            ctx.stroke();
-                        }
+                        this.drawHex(ctx, centerX, centerY, hexSize, board[row][col], showShips, row, col, isLastClicked);
                     }
                 }
                 
@@ -1268,8 +1263,9 @@
                         
                         ctx.globalAlpha = 0.6;
                         for (const pos of positions) {
-                            const center = this.getHexCenter(pos.row, pos.col, canvas);
-                            this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
+                            const centerX = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2;
+                            const centerY = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
+                            this.drawHex(ctx, centerX, centerY, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
                     }
@@ -1326,16 +1322,6 @@
                 ctx.strokeStyle = isLastClicked ? '#FFD700' : 'rgba(255, 255, 255, 0.3)';
                 ctx.lineWidth = isLastClicked ? 3 : 1;
                 ctx.stroke();
-                
-                // Рисуем координаты клетки мелким шрифтом
-                ctx.fillStyle = isLastClicked ? '#FFD700' : 'rgba(255, 255, 255, 0.7)';
-                ctx.font = `${Math.max(8, hexSize * 0.15)}px Arial`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                
-                // Отображаем row и col
-                const coordText = `${row},${col}`;
-                ctx.fillText(coordText, x, y);
                 
                 if (state === 'hit') {
                     ctx.strokeStyle = '#FFF';
