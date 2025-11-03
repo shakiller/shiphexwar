@@ -739,6 +739,8 @@
             // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - с компенсацией сдвига
             // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - точное соответствие с drawBoard
 // АЛЬТЕРНАТИВНЫЙ МЕТОД - преобразование координат
+// ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
+// УПРОЩЕННЫЙ МЕТОД С ПОИСКОМ БЛИЖАЙШЕГО ЦЕНТРА
 getHexAtPosition(x, y, canvas) {
     const hexSize = this.getHexSize(canvas);
     const hexHeight = hexSize * Math.sqrt(3);
@@ -747,21 +749,45 @@ getHexAtPosition(x, y, canvas) {
     const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
     const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
     
-    // Преобразуем координаты мыши в координаты сетки
-    const gridX = (x - offsetX) / (hexWidth * 0.75);
-    const gridY = (y - offsetY - (Math.floor(gridX) % 2) * hexHeight / 2) / hexHeight;
+    let closestHex = null;
+    let minDistance = hexSize * 0.9; // Максимальное расстояние для попадания
     
-    // Округляем до ближайшей ячейки
-    const col = Math.floor(gridX);
-    const row = Math.floor(gridY);
-    
-    // Проверяем валидность
-    if (this.isValidPosition(row, col)) {
-        return { row, col };
+    // Проверяем все ячейки и находим ближайшую
+    for (let row = 0; row < this.boardSize; row++) {
+        for (let col = 0; col < this.boardSize; col++) {
+            const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+            const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+            
+            const distance = Math.sqrt((x - hexX) ** 2 + (y - hexY) ** 2);
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestHex = { row, col, hexX, hexY };
+            }
+        }
     }
+    
+    if (closestHex) {
+        // Обновляем отладочную информацию
+        document.getElementById('coordsInfo').textContent = 
+            `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | ` +
+            `calcX: ${Math.floor(closestHex.hexX)}, calcY: ${Math.floor(closestHex.hexY)} | ` +
+            `diffX: ${Math.floor(x - closestHex.hexX)}, diffY: ${Math.floor(y - closestHex.hexY)} | ` +
+            `distance: ${Math.floor(minDistance)} | grid: [${closestHex.row},${closestHex.col}]`;
+        
+        return closestHex;
+    }
+    
+    // Если ничего не найдено, тоже показываем отладочную информацию
+    document.getElementById('coordsInfo').textContent = 
+        `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | ` +
+        `click: [${Math.floor(x)},${Math.floor(y)}] | NO HEX FOUND`;
     
     return null;
 }
+
+
+
             getHexSize(canvas) {
                 // Убедимся, что размер вычисляется одинаково для всех методов
                 const baseSize = Math.min(canvas.width, canvas.height);
