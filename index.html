@@ -276,6 +276,16 @@
             margin-top: 10px;
         }
 
+        .coords-debug {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: #ccc;
+            font-family: monospace;
+        }
+
         /* Медиа-запросы для мобильных устройств */
         @media (max-width: 768px) {
             .game-boards {
@@ -355,6 +365,10 @@
             <!-- Блок информации о последнем клике -->
             <div class="last-click-info" id="lastClickInfo" style="display: none;">
                 Последняя нажатая клетка: <span id="lastClickCoords">-</span>
+            </div>
+            
+            <div class="coords-debug" id="coordsDebug">
+                Отладка координат: <span id="coordsInfo">-</span>
             </div>
             
             <div class="debug-info" id="debugInfo"></div>
@@ -629,10 +643,23 @@
                 
                 // Детальная отладочная информация
                 const debugInfo = document.getElementById('debugInfo');
+                const coordsDebug = document.getElementById('coordsInfo');
+                
                 if (hex) {
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
                                           Ячейка: строка=${hex.row}, столбец=${hex.col}`;
                     debugInfo.style.display = 'block';
+                    
+                    // Отладочная информация о координатах
+                    const hexSize = this.getHexSize(this.myBoardCanvas);
+                    const hexHeight = hexSize * Math.sqrt(3);
+                    const hexWidth = hexSize * 2;
+                    const offsetX = (this.myBoardCanvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+                    const offsetY = (this.myBoardCanvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                    const calcX = offsetX + hex.col * hexWidth * 0.75 + hexWidth / 2;
+                    const calcY = offsetY + hex.row * hexHeight + (hex.col % 2) * hexHeight / 2 + hexHeight / 2;
+                    
+                    coordsDebug.textContent = `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | calcX: ${Math.floor(calcX)}, calcY: ${Math.floor(calcY)} | diffX: ${Math.floor(x - calcX)}, diffY: ${Math.floor(y - calcY)}`;
                     
                     // Сохраняем последний клик
                     this.lastClickedHexMyBoard = hex;
@@ -672,6 +699,7 @@
                 } else {
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
+                    coordsDebug.textContent = 'Клик вне поля';
                 }
                 
                 this.drawBoards();
@@ -708,7 +736,7 @@
                 this.drawBoards();
             }
             
-            // ПРОСТОЙ И ТОЧНЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
+            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - полная синхронизация с отрисовкой
             getHexAtPosition(x, y, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
@@ -718,32 +746,28 @@
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
-                // Проходим по всем ячейкам и находим ближайшую
-                let closestHex = null;
-                let minDistance = Infinity;
-                
+                // Проверяем все ячейки в правильном порядке
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
                         const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
                         
+                        // Упрощенная проверка расстояния до центра
                         const distance = Math.sqrt((x - hexX) ** 2 + (y - hexY) ** 2);
                         
-                        // Если точка внутри шестиугольника или очень близко к нему
-                        if (distance < hexSize * 0.9) {
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                closestHex = { row, col, hexX, hexY };
-                            }
+                        // Если точка достаточно близко к центру ячейки
+                        if (distance < hexSize * 0.8) {
+                            return { row, col, hexX, hexY };
                         }
                     }
                 }
-                
-                return closestHex;
+                return null;
             }
             
             getHexSize(canvas) {
-                return Math.min(canvas.width, canvas.height) / (this.boardSize * 2.2);
+                // Убедимся, что размер вычисляется одинаково для всех методов
+                const baseSize = Math.min(canvas.width, canvas.height);
+                return baseSize / (this.boardSize * 2.2);
             }
             
             placeShip(row, col, ship, orientation) {
@@ -1182,7 +1206,7 @@
                 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // Добавляем отступы для центрирования
+                // Добавляем отступы для центрирования - ТОЧНО ТАКИЕ ЖЕ КАК В getHexAtPosition!
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
@@ -1324,7 +1348,7 @@
                         
                         // Рисуем круг зоны клика
                         ctx.beginPath();
-                        ctx.arc(x, y, hexSize * 0.9, 0, Math.PI * 2);
+                        ctx.arc(x, y, hexSize * 0.8, 0, Math.PI * 2);
                         ctx.stroke();
                         ctx.fill();
                         
