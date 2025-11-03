@@ -632,6 +632,69 @@
                 });
             }
             
+            // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА
+            getHexCenter(row, col, canvas) {
+                const hexSize = this.getHexSize(canvas);
+                const hexHeight = hexSize * Math.sqrt(3);
+                const hexWidth = hexSize * 2;
+                
+                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
+                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                
+                const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                
+                return { x, y, hexSize };
+            }
+            
+            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
+            getHexAtPosition(x, y, canvas) {
+                let closestHex = null;
+                let minDistance = Infinity;
+                
+                // Проверяем все ячейки
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const center = this.getHexCenter(row, col, canvas);
+                        const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
+                        
+                        // Расстояние должно быть меньше радиуса гекса
+                        if (distance < center.hexSize * 0.9) {
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestHex = { 
+                                    row, 
+                                    col, 
+                                    hexX: center.x, 
+                                    hexY: center.y,
+                                    distance: distance
+                                };
+                            }
+                        }
+                    }
+                }
+                
+                // ОТЛАДКА: показываем информацию о найденной ячейке
+                if (closestHex) {
+                    document.getElementById('coordsInfo').textContent = 
+                        `Найдена ячейка [${closestHex.row},${closestHex.col}] | ` +
+                        `Центр: [${Math.floor(closestHex.hexX)},${Math.floor(closestHex.hexY)}] | ` +
+                        `Клик: [${Math.floor(x)},${Math.floor(y)}] | ` +
+                        `Расстояние: ${Math.floor(closestHex.distance)}`;
+                } else {
+                    document.getElementById('coordsInfo').textContent = 
+                        `Клик: [${Math.floor(x)},${Math.floor(y)}] | ЯЧЕЙКА НЕ НАЙДЕНА`;
+                }
+                
+                return closestHex;
+            }
+            
+            getHexSize(canvas) {
+                // Фиксированный размер, чтобы не менялся при разных вычислениях
+                const baseSize = Math.min(canvas.width, canvas.height);
+                return baseSize / (this.boardSize * 2.1);
+            }
+            
             handleMyBoardClick(event) {
                 if (this.gamePhase !== 'setup') return;
                 
@@ -639,27 +702,18 @@
                 const x = event.clientX - rect.left;
                 const y = event.clientY - rect.top;
                 
+                console.log(`Клик по моему полю: x=${x}, y=${y}`);
+                
                 const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
                 
-                // Детальная отладочная информация
                 const debugInfo = document.getElementById('debugInfo');
-                const coordsDebug = document.getElementById('coordsInfo');
                 
                 if (hex) {
+                    console.log(`Найдена ячейка: row=${hex.row}, col=${hex.col}`);
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
-                                          Ячейка: строка=${hex.row}, столбец=${hex.col}`;
+                                          Ячейка: строка=${hex.row}, столбец=${hex.col}<br>
+                                          Расстояние до центра: ${Math.floor(hex.distance)}`;
                     debugInfo.style.display = 'block';
-                    
-                    // Отладочная информация о координатах
-                    const hexSize = this.getHexSize(this.myBoardCanvas);
-                    const hexHeight = hexSize * Math.sqrt(3);
-                    const hexWidth = hexSize * 2;
-                    const offsetX = (this.myBoardCanvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                    const offsetY = (this.myBoardCanvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-                    const calcX = offsetX + hex.col * hexWidth * 0.75 + hexWidth / 2;
-                    const calcY = offsetY + hex.row * hexHeight + (hex.col % 2) * hexHeight / 2 + hexHeight / 2;
-                    
-                    coordsDebug.textContent = `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | calcX: ${Math.floor(calcX)}, calcY: ${Math.floor(calcY)} | diffX: ${Math.floor(x - calcX)}, diffY: ${Math.floor(y - calcY)}`;
                     
                     // Сохраняем последний клик
                     this.lastClickedHexMyBoard = hex;
@@ -699,7 +753,6 @@
                 } else {
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)} -> вне поля`;
                     debugInfo.style.display = 'block';
-                    coordsDebug.textContent = 'Клик вне поля';
                 }
                 
                 this.drawBoards();
@@ -712,13 +765,16 @@
                 const x = event.clientX - rect.left;
                 const y = event.clientY - rect.top;
                 
+                console.log(`Клик по полю противника: x=${x}, y=${y}`);
+                
                 const hex = this.getHexAtPosition(x, y, this.opponentBoardCanvas);
                 
-                // Отладочная информация
                 const debugInfo = document.getElementById('debugInfo');
                 if (hex) {
+                    console.log(`Найдена ячейка: row=${hex.row}, col=${hex.col}`);
                     debugInfo.innerHTML = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
-                                          Ячейка: строка=${hex.row}, столбец=${hex.col}`;
+                                          Ячейка: строка=${hex.row}, столбец=${hex.col}<br>
+                                          Расстояние до центра: ${Math.floor(hex.distance)}`;
                     debugInfo.style.display = 'block';
                     
                     // Сохраняем последний клик
@@ -735,69 +791,6 @@
                 
                 this.drawBoards();
             }
-            
-            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - с компенсацией сдвига
-            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - точное соответствие с drawBoard
-// АЛЬТЕРНАТИВНЫЙ МЕТОД - преобразование координат
-// ПОЛНОСТЬЮ ПЕРЕПИСАННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
-// УПРОЩЕННЫЙ МЕТОД С ПОИСКОМ БЛИЖАЙШЕГО ЦЕНТРА
-getHexAtPosition(x, y, canvas) {
-    const hexSize = this.getHexSize(canvas);
-    const hexHeight = hexSize * Math.sqrt(3);
-    const hexWidth = hexSize * 2;
-    
-    const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-    const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-    
-    let closestHex = null;
-    let minDistance = hexSize * 0.9; // Максимальное расстояние для попадания
-    
-    // Проверяем все ячейки и находим ближайшую
-    for (let row = 0; row < this.boardSize; row++) {
-        for (let col = 0; col < this.boardSize; col++) {
-            const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-            const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
-            
-            const distance = Math.sqrt((x - hexX) ** 2 + (y - hexY) ** 2);
-            
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestHex = { row, col, hexX, hexY };
-            }
-        }
-    }
-    
-    if (closestHex) {
-        // Обновляем отладочную информацию
-        document.getElementById('coordsInfo').textContent = 
-            `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | ` +
-            `calcX: ${Math.floor(closestHex.hexX)}, calcY: ${Math.floor(closestHex.hexY)} | ` +
-            `diffX: ${Math.floor(x - closestHex.hexX)}, diffY: ${Math.floor(y - closestHex.hexY)} | ` +
-            `distance: ${Math.floor(minDistance)} | grid: [${closestHex.row},${closestHex.col}]`;
-        
-        return closestHex;
-    }
-    
-    // Если ничего не найдено, тоже показываем отладочную информацию
-    document.getElementById('coordsInfo').textContent = 
-        `offsetX: ${Math.floor(offsetX)}, offsetY: ${Math.floor(offsetY)} | ` +
-        `click: [${Math.floor(x)},${Math.floor(y)}] | NO HEX FOUND`;
-    
-    return null;
-}
-
-
-
-         getHexSize(canvas) {
-    // Универсальный расчет размера гекса
-    const availableWidth = canvas.width * 0.8;
-    const availableHeight = canvas.height * 0.8;
-    
-    const hexWidthByWidth = availableWidth / (this.boardSize * 1.5 + 0.5);
-    const hexHeightByHeight = availableHeight / (this.boardSize * Math.sqrt(3) + 0.5);
-    
-    return Math.min(hexWidthByWidth / 2, hexHeightByHeight);
-}
             
             placeShip(row, col, ship, orientation) {
                 const positions = this.getShipPositions(row, col, ship.size, orientation);
@@ -1229,33 +1222,41 @@ getHexAtPosition(x, y, canvas) {
             }
             
             drawBoard(ctx, canvas, board, ships, showShips) {
-                const hexSize = this.getHexSize(canvas);
-                const hexHeight = hexSize * Math.sqrt(3);
-                const hexWidth = hexSize * 2;
-                
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // Добавляем отступы для центрирования - ТОЧНО ТАКИЕ ЖЕ КАК В getHexAtPosition!
-                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-                
-                // Компенсация сдвига - такая же как в getHexAtPosition
-                const shiftX = 0;
-                const shiftY = 0;
+                // ОТЛАДКА: рисуем информацию о размере
+                if (this.showTouchZones) {
+                    ctx.fillStyle = 'red';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 10, 15);
+                }
                 
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
-                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
-                        
-                        // Проверяем, является ли эта ячейка последней нажатой
+                        const center = this.getHexCenter(row, col, canvas);
                         const isLastClicked = 
                             (showShips && this.lastClickedHexMyBoard && 
                              this.lastClickedHexMyBoard.row === row && this.lastClickedHexMyBoard.col === col) ||
                             (!showShips && this.lastClickedHexOpponentBoard && 
                              this.lastClickedHexOpponentBoard.row === row && this.lastClickedHexOpponentBoard.col === col);
                         
-                        this.drawHex(ctx, x, y, hexSize, board[row][col], showShips, row, col, isLastClicked);
+                        this.drawHex(ctx, center.x, center.y, center.hexSize, board[row][col], showShips, row, col, isLastClicked);
+                        
+                        // ОТЛАДКА: рисуем центры всех гексов
+                        if (this.showTouchZones) {
+                            ctx.fillStyle = 'lime';
+                            ctx.beginPath();
+                            ctx.arc(center.x, center.y, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Рисуем зоны клика
+                            ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.arc(center.x, center.y, center.hexSize * 0.9, 0, Math.PI * 2);
+                            ctx.stroke();
+                        }
                     }
                 }
                 
@@ -1267,17 +1268,11 @@ getHexAtPosition(x, y, canvas) {
                         
                         ctx.globalAlpha = 0.6;
                         for (const pos of positions) {
-                            const x = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
-                            const y = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
-                            this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
+                            const center = this.getHexCenter(pos.row, pos.col, canvas);
+                            this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
                     }
-                }
-                
-                // Рисуем зоны клика если включено
-                if (this.showTouchZones) {
-                    this.drawTouchZones(ctx, canvas, showShips);
                 }
             }
             
@@ -1358,45 +1353,6 @@ getHexAtPosition(x, y, canvas) {
                     ctx.beginPath();
                     ctx.arc(x, y, hexSize * 0.15, 0, Math.PI * 2);
                     ctx.fill();
-                }
-            }
-            
-            // Рисуем зоны клика для отладки
-            drawTouchZones(ctx, canvas, showShips) {
-                const hexSize = this.getHexSize(canvas);
-                const hexHeight = hexSize * Math.sqrt(3);
-                const hexWidth = hexSize * 2;
-                
-                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-                
-                // Такая же компенсация сдвига
-                const shiftX = 0;
-                const shiftY = 0;
-                
-                ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
-                ctx.lineWidth = 1;
-                ctx.fillStyle = 'rgba(255, 0, 255, 0.1)';
-                
-                for (let row = 0; row < this.boardSize; row++) {
-                    for (let col = 0; col < this.boardSize; col++) {
-                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
-                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
-                        
-                        // Рисуем круг зоны клика
-                        ctx.beginPath();
-                        ctx.arc(x, y, hexSize * 0.8, 0, Math.PI * 2);
-                        ctx.stroke();
-                        ctx.fill();
-                        
-                        // Подписываем координаты
-                        ctx.fillStyle = 'magenta';
-                        ctx.font = '10px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(`${row},${col}`, x, y + hexSize * 0.8);
-                        ctx.fillStyle = 'rgba(255, 0, 255, 0.1)';
-                    }
                 }
             }
             
