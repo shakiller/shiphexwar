@@ -788,11 +788,16 @@ getHexAtPosition(x, y, canvas) {
 
 
 
-            getHexSize(canvas) {
-                // Убедимся, что размер вычисляется одинаково для всех методов
-                const baseSize = Math.min(canvas.width, canvas.height);
-                return baseSize / (this.boardSize * 2.2);
-            }
+         getHexSize(canvas) {
+    // Универсальный расчет размера гекса
+    const availableWidth = canvas.width * 0.8;
+    const availableHeight = canvas.height * 0.8;
+    
+    const hexWidthByWidth = availableWidth / (this.boardSize * 1.5 + 0.5);
+    const hexHeightByHeight = availableHeight / (this.boardSize * Math.sqrt(3) + 0.5);
+    
+    return Math.min(hexWidthByWidth / 2, hexHeightByHeight);
+}
             
             placeShip(row, col, ship, orientation) {
                 const positions = this.getShipPositions(row, col, ship.size, orientation);
