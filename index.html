@@ -145,13 +145,19 @@
             font-weight: bold;
         }
 
+        .canvas-container {
+            position: relative;
+            display: inline-block;
+        }
+
         canvas {
             display: block;
-            margin: 0 auto;
             cursor: pointer;
             border: 2px solid rgba(255, 255, 255, 0.3);
             background: rgba(0, 0, 50, 0.7);
             border-radius: 10px;
+            width: 500px;
+            height: 500px;
         }
 
         .ship-palette {
@@ -377,13 +383,17 @@
         <div class="game-boards">
             <div class="board-container">
                 <div class="board-title">Ваше поле</div>
-                <div class="mouse-coords" id="myBoardCoords">x: 0, y: 0</div>
-                <canvas id="myBoard" width="500" height="500"></canvas>
+                <div class="canvas-container">
+                    <div class="mouse-coords" id="myBoardCoords">x: 0, y: 0</div>
+                    <canvas id="myBoard"></canvas>
+                </div>
             </div>
             <div class="board-container">
                 <div class="board-title">Поле противника</div>
-                <div class="mouse-coords" id="opponentBoardCoords">x: 0, y: 0</div>
-                <canvas id="opponentBoard" width="500" height="500"></canvas>
+                <div class="canvas-container">
+                    <div class="mouse-coords" id="opponentBoardCoords">x: 0, y: 0</div>
+                    <canvas id="opponentBoard"></canvas>
+                </div>
             </div>
         </div>
 
@@ -401,11 +411,9 @@
                 this.myCtx = this.myBoardCanvas.getContext('2d');
                 this.opponentCtx = this.opponentBoardCanvas.getContext('2d');
                 
-                // Принудительно устанавливаем размеры canvas
-                this.myBoardCanvas.width = 500;
-                this.myBoardCanvas.height = 500;
-                this.opponentBoardCanvas.width = 500;
-                this.opponentBoardCanvas.height = 500;
+                // Устанавливаем внутренние размеры canvas равными CSS размерам
+                this.setCanvasSize(this.myBoardCanvas, 500, 500);
+                this.setCanvasSize(this.opponentBoardCanvas, 500, 500);
                 
                 // Переменные для отслеживания мыши
                 this.currentMouseX = 0;
@@ -456,6 +464,27 @@
                 this.drawBoards();
             }
             
+            // Устанавливаем размеры canvas с учетом devicePixelRatio
+            setCanvasSize(canvas, width, height) {
+                const dpr = window.devicePixelRatio || 1;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                const ctx = canvas.getContext('2d');
+                ctx.scale(dpr, dpr);
+            }
+            
+            // Преобразуем координаты мыши в координаты canvas
+            getMousePos(canvas, evt) {
+                const rect = canvas.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                return {
+                    x: (evt.clientX - rect.left) * (canvas.width / rect.width / dpr),
+                    y: (evt.clientY - rect.top) * (canvas.height / rect.height / dpr)
+                };
+            }
+            
             initializeGame() {
                 this.myBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(''));
                 this.opponentBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(''));
@@ -483,31 +512,36 @@
             }
             
             setupEventListeners() {
-                // Обработчики кликов
-                this.myBoardCanvas.addEventListener('click', (e) => this.handleMyBoardClick(e));
-                this.opponentBoardCanvas.addEventListener('click', (e) => this.handleOpponentBoardClick(e));
+                // Обработчики кликов с правильным преобразованием координат
+                this.myBoardCanvas.addEventListener('click', (e) => {
+                    const pos = this.getMousePos(this.myBoardCanvas, e);
+                    this.handleMyBoardClick(pos.x, pos.y);
+                });
+                
+                this.opponentBoardCanvas.addEventListener('click', (e) => {
+                    const pos = this.getMousePos(this.opponentBoardCanvas, e);
+                    this.handleOpponentBoardClick(pos.x, pos.y);
+                });
                 
                 // Обработчики движения мыши для предпросмотра
                 this.myBoardCanvas.addEventListener('mousemove', (e) => {
-                    const rect = this.myBoardCanvas.getBoundingClientRect();
-                    this.currentMouseX = e.clientX - rect.left;
-                    this.currentMouseY = e.clientY - rect.top;
+                    const pos = this.getMousePos(this.myBoardCanvas, e);
+                    this.currentMouseX = pos.x;
+                    this.currentMouseY = pos.y;
                     
                     // Обновляем координаты на дисплее
                     document.getElementById('myBoardCoords').textContent = 
-                        `x: ${Math.floor(this.currentMouseX)}, y: ${Math.floor(this.currentMouseY)}`;
+                        `x: ${Math.floor(pos.x)}, y: ${Math.floor(pos.y)}`;
                     
-                    this.handleMouseMove(this.currentMouseX, this.currentMouseY, this.myBoardCanvas);
+                    this.handleMouseMove(pos.x, pos.y, this.myBoardCanvas);
                 });
                 
                 this.opponentBoardCanvas.addEventListener('mousemove', (e) => {
-                    const rect = this.opponentBoardCanvas.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
+                    const pos = this.getMousePos(this.opponentBoardCanvas, e);
                     
                     // Обновляем координаты на дисплее
                     document.getElementById('opponentBoardCoords').textContent = 
-                        `x: ${Math.floor(x)}, y: ${Math.floor(y)}`;
+                        `x: ${Math.floor(pos.x)}, y: ${Math.floor(pos.y)}`;
                 });
                 
                 // Убираем предпросмотр при уходе мыши с поля
@@ -638,18 +672,21 @@
                 });
             }
             
-            // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА - используется везде
+            // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА
             getHexCenter(row, col, canvas) {
-                const hexSize = this.getHexSize(canvas);
+                const hexSize = 30; // Фиксированный размер для простоты
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Точные формулы для центрирования
+                // Получаем реальные размеры canvas (уже с учетом DPR)
+                const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+                const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+                
                 const totalWidth = this.boardSize * hexWidth * 0.75 - hexWidth * 0.25;
                 const totalHeight = this.boardSize * hexHeight + hexHeight * 0.5;
                 
-                const offsetX = (canvas.width - totalWidth) / 2;
-                const offsetY = (canvas.height - totalHeight) / 2;
+                const offsetX = (canvasWidth - totalWidth) / 2;
+                const offsetY = (canvasHeight - totalHeight) / 2;
                 
                 const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
                 const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
@@ -665,7 +702,7 @@
                         const center = this.getHexCenter(row, col, canvas);
                         const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
                         
-                        if (distance < center.hexSize * 0.8) {
+                        if (distance < center.hexSize * 0.9) {
                             document.getElementById('coordsInfo').textContent = 
                                 `Ячейка [${row},${col}] | Центр: [${Math.floor(center.x)},${Math.floor(center.y)}] | ` +
                                 `Клик: [${Math.floor(x)},${Math.floor(y)}] | Расстояние: ${Math.floor(distance)}`;
@@ -678,24 +715,9 @@
                     `Клик: [${Math.floor(x)},${Math.floor(y)}] | ЯЧЕЙКА НЕ НАЙДЕНА`;
                 return null;
             }
-
-            getHexSize(canvas) {
-                // Рассчитываем размер на основе реальных размеров canvas
-                const availableWidth = canvas.width - 40; // Отступы
-                const availableHeight = canvas.height - 40;
-                
-                const hexWidthByCols = availableWidth / (this.boardSize * 1.5 + 0.5);
-                const hexHeightByRows = availableHeight / (this.boardSize * Math.sqrt(3) + 1);
-                
-                return Math.min(hexWidthByCols, hexHeightByRows * 2) / 2;
-            }
             
-            handleMyBoardClick(event) {
+            handleMyBoardClick(x, y) {
                 if (this.gamePhase !== 'setup') return;
-                
-                const rect = this.myBoardCanvas.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
                 
                 console.log('=== КЛИК ПО МОЕМУ ПОЛЮ ===');
                 console.log('Координаты мыши:', x, y);
@@ -759,12 +781,8 @@
                 this.drawBoards();
             }
             
-            handleOpponentBoardClick(event) {
+            handleOpponentBoardClick(x, y) {
                 if (this.gamePhase !== 'battle' || this.currentPlayer !== 'me') return;
-                
-                const rect = this.opponentBoardCanvas.getBoundingClientRect();
-                const x = event.clientX - rect.left;
-                const y = event.clientY - rect.top;
                 
                 console.log(`Клик по полю противника: x=${x}, y=${y}`);
                 
@@ -794,12 +812,12 @@
                 this.drawBoards();
             }
             
+            // ... остальные методы остаются без изменений ...
             placeShip(row, col, ship, orientation) {
                 const positions = this.getShipPositions(row, col, ship.size, orientation);
                 
                 if (!positions) return false;
                 
-                // Проверяем, что корабль не пересекается с другими и не касается их
                 if (!this.canPlaceShip(positions)) {
                     return false;
                 }
@@ -820,15 +838,12 @@
                 return true;
             }
             
-            // Проверка возможности размещения корабля (без касания других кораблей)
             canPlaceShip(positions) {
                 for (const pos of positions) {
-                    // Проверяем, что клетка свободна
                     if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
                         return false;
                     }
                     
-                    // Проверяем все соседние клетки (включая диагональные в гексагональной сетке)
                     const neighbors = this.getNeighborCells(pos.row, pos.col);
                     for (const neighbor of neighbors) {
                         if (this.myBoard[neighbor.row][neighbor.col] === 'ship') {
@@ -839,25 +854,14 @@
                 return true;
             }
             
-            // Получение всех соседних клеток (включая диагональные)
             getNeighborCells(row, col) {
                 const neighbors = [];
                 const directions = [
-                    { dr: 0, dc: 1 },   // Вправо
-                    { dr: -1, dc: 1 },  // Вверх-вправо
-                    { dr: -1, dc: 0 },  // Вверх-влево
-                    { dr: 0, dc: -1 },  // Влево
-                    { dr: 1, dc: -1 },  // Вниз-влево
-                    { dr: 1, dc: 0 },   // Вниз-вправо
-                    // Диагональные направления в гексагональной сетке
-                    { dr: -1, dc: 2 },  // Диагональ
-                    { dr: -2, dc: 1 },  // Диагональ
-                    { dr: -2, dc: -1 }, // Диагональ
-                    { dr: -1, dc: -2 }, // Диагональ
-                    { dr: 1, dc: -2 },  // Диагональ
-                    { dr: 2, dc: -1 },  // Диагональ
-                    { dr: 2, dc: 1 },   // Диагональ
-                    { dr: 1, dc: 2 }    // Диагональ
+                    { dr: 0, dc: 1 }, { dr: -1, dc: 1 }, { dr: -1, dc: 0 }, 
+                    { dr: 0, dc: -1 }, { dr: 1, dc: -1 }, { dr: 1, dc: 0 },
+                    { dr: -1, dc: 2 }, { dr: -2, dc: 1 }, { dr: -2, dc: -1 },
+                    { dr: -1, dc: -2 }, { dr: 1, dc: -2 }, { dr: 2, dc: -1 },
+                    { dr: 2, dc: 1 }, { dr: 1, dc: 2 }
                 ];
                 
                 for (const dir of directions) {
@@ -872,11 +876,9 @@
                 return neighbors;
             }
             
-            // Удаление корабля по позиции
             removeShipAt(row, col) {
                 if (this.myBoard[row][col] !== 'ship') return;
                 
-                // Находим корабль, который занимает эту клетку
                 const shipIndex = this.myShips.findIndex(ship => 
                     ship.positions.some(pos => pos.row === row && pos.col === col)
                 );
@@ -884,38 +886,30 @@
                 if (shipIndex !== -1) {
                     const ship = this.myShips[shipIndex];
                     
-                    // Освобождаем клетки
                     for (const pos of ship.positions) {
                         this.myBoard[pos.row][pos.col] = '';
                     }
                     
-                    // Удаляем корабль из массива
                     this.myShips.splice(shipIndex, 1);
-                    
-                    // Обновляем палитру
                     this.updateShipPalette();
                     
                     this.drawBoards();
                     this.updateScores();
                     
-                    // Скрываем кнопку начала игры, если не все корабли размещены
                     if (!this.allShipsPlaced()) {
                         document.getElementById('startGame').style.display = 'none';
                     }
                 }
             }
             
-            // Обновление состояния палитры кораблей
             updateShipPalette() {
                 const palette = document.getElementById('shipPalette');
                 const shipElements = palette.querySelectorAll('.ship');
                 
-                // Сбрасываем все корабли в палитре
                 shipElements.forEach(shipElement => {
                     shipElement.classList.remove('placed');
                 });
                 
-                // Помечаем размещенные корабли
                 this.myShips.forEach(ship => {
                     const shipElement = document.querySelector(
                         `.ship[data-ship-index="${ship.typeIndex}"][data-ship-instance="${ship.instance}"]`
@@ -932,12 +926,8 @@
                 let currentCol = col;
                 
                 const directions = [
-                    { dr: 0, dc: 1 },   // Вправо
-                    { dr: -1, dc: 1 },  // Вверх-вправо
-                    { dr: -1, dc: 0 },  // Вверх-влево
-                    { dr: 0, dc: -1 },  // Влево
-                    { dr: 1, dc: -1 },  // Вниз-влево
-                    { dr: 1, dc: 0 }    // Вниз-вправо
+                    { dr: 0, dc: 1 }, { dr: -1, dc: 1 }, { dr: -1, dc: 0 },
+                    { dr: 0, dc: -1 }, { dr: 1, dc: -1 }, { dr: 1, dc: 0 }
                 ];
                 
                 const dir = directions[orientation];
@@ -968,7 +958,6 @@
                         let placed = false;
                         let attempts = 0;
                         
-                        // Пытаемся разместить корабль, пока не найдем валидную позицию
                         while (!placed && attempts < 500) {
                             const row = Math.floor(Math.random() * this.boardSize);
                             const col = Math.floor(Math.random() * this.boardSize);
@@ -983,7 +972,6 @@
                             const positions = this.getShipPositions(row, col, ship.size, orientation);
                             
                             if (positions && this.canPlaceShip(positions)) {
-                                // Размещаем корабль
                                 const shipData = {
                                     positions: positions,
                                     hits: Array(shipType.size).fill(false),
@@ -1000,10 +988,6 @@
                                 placed = true;
                             }
                             attempts++;
-                        }
-                        
-                        if (!placed) {
-                            console.warn(`Не удалось разместить корабль ${shipType.name} (${shipType.size})`);
                         }
                     }
                 });
@@ -1224,15 +1208,18 @@
             }
             
             drawBoard(ctx, canvas, board, ships, showShips) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                // Получаем реальные размеры canvas (уже с учетом DPR)
+                const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
+                const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+                
+                ctx.clearRect(0, 0, canvasWidth, canvasHeight);
                 
                 // ОТЛАДКА: информация о размерах
                 if (this.showTouchZones) {
-                    const hexSize = this.getHexSize(canvas);
                     ctx.fillStyle = 'red';
                     ctx.font = '12px Arial';
                     ctx.textAlign = 'left';
-                    ctx.fillText(`Размер гекса: ${Math.floor(hexSize)}px | Canvas: ${canvas.width}x${canvas.height}`, 10, 15);
+                    ctx.fillText(`Canvas: ${Math.floor(canvasWidth)}x${Math.floor(canvasHeight)}`, 10, 15);
                 }
                 
                 // Рисуем все гексы используя ОДИН метод вычисления координат
@@ -1259,7 +1246,7 @@
                             ctx.strokeStyle = 'lime';
                             ctx.lineWidth = 1;
                             ctx.beginPath();
-                            ctx.arc(center.x, center.y, center.hexSize * 0.8, 0, Math.PI * 2);
+                            ctx.arc(center.x, center.y, center.hexSize * 0.9, 0, Math.PI * 2);
                             ctx.stroke();
                             
                             // Координаты
@@ -1301,7 +1288,7 @@
                 
                 // Подсветка последней нажатой ячейки
                 if (isLastClicked) {
-                    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)'; // Золотистая подсветка
+                    ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
                     ctx.fill();
                 }
                 
@@ -1329,7 +1316,6 @@
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
                 }
                 
-                // Если это не последняя нажатая ячейка, заливаем обычным цветом
                 if (!isLastClicked) {
                     ctx.fill();
                 }
@@ -1357,7 +1343,7 @@
                 }
             }
             
-            // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ
+            // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ (остается без изменений)
             createOnlineGame() {
                 this.isOnline = true;
                 this.isHost = true;
