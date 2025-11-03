@@ -738,40 +738,30 @@
             
             // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - с компенсацией сдвига
             // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - точное соответствие с drawBoard
+// АЛЬТЕРНАТИВНЫЙ МЕТОД - преобразование координат
 getHexAtPosition(x, y, canvas) {
     const hexSize = this.getHexSize(canvas);
     const hexHeight = hexSize * Math.sqrt(3);
     const hexWidth = hexSize * 2;
     
-    // ТОЧНО ТАКИЕ ЖЕ ФОРМУЛЫ КАК В drawBoard!
     const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
     const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
     
-    let closestHex = null;
-    let minDistance = Infinity;
+    // Преобразуем координаты мыши в координаты сетки
+    const gridX = (x - offsetX) / (hexWidth * 0.75);
+    const gridY = (y - offsetY - (Math.floor(gridX) % 2) * hexHeight / 2) / hexHeight;
     
-    for (let row = 0; row < this.boardSize; row++) {
-        for (let col = 0; col < this.boardSize; col++) {
-            // ТОЧНАЯ формула как в drawBoard
-            const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-            const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
-            
-            // Упрощенная проверка расстояния до центра
-            const distance = Math.sqrt((x - hexX) ** 2 + (y - hexY) ** 2);
-            
-            // Если точка достаточно близко к центру ячейки
-            if (distance < hexSize * 0.8) {
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestHex = { row, col, hexX, hexY };
-                }
-            }
-        }
+    // Округляем до ближайшей ячейки
+    const col = Math.floor(gridX);
+    const row = Math.floor(gridY);
+    
+    // Проверяем валидность
+    if (this.isValidPosition(row, col)) {
+        return { row, col };
     }
     
-    return closestHex;
+    return null;
 }
-            
             getHexSize(canvas) {
                 // Убедимся, что размер вычисляется одинаково для всех методов
                 const baseSize = Math.min(canvas.width, canvas.height);
