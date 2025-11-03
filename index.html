@@ -368,12 +368,12 @@
 
             <div class="rotation-controls">
                 <button class="rotation-btn" id="rotateLeft">↶ Повернуть влево</button>
-                <div class="rotation-info" id="rotationInfo">Направление: →</div>
+                <div class="rotation-info" id="rotationInfo">Направление: ↓</div>
                 <button class="rotation-btn" id="rotateRight">Повернуть вправо ↷</button>
             </div>
             
             <div class="direction-hint">
-                💡 Направления: → (вправо), ↗ (вверх-вправо), ↖ (вверх-влево), ← (влево), ↙ (вниз-влево), ↘ (вниз-вправо)
+                💡 Направления: ↓ (вниз), → (вправо), ↘ (диагональ), ↑ (вверх), ← (влево), ↖ (диагональ)
             </div>
             
             <div class="ship-palette" id="shipPalette">
@@ -462,7 +462,7 @@
                 this.shipOrientation = 0;
                 
                 // Названия направлений для отображения
-                this.directionNames = ['→', '↗', '↖', '←', '↙', '↘'];
+                this.directionNames = ['↓', '→', '↘', '↑', '←', '↖'];
                 
                 // Онлайн-переменные
                 this.peer = null;
@@ -825,19 +825,20 @@
                 this.drawBoards();
             }
             
-            // Правильные направления для гексагональной сетки (odd-q вертикальная схема)
+            // ПРАВИЛЬНЫЕ ПРЯМЫЕ НАПРАВЛЕНИЯ ДЛЯ ГЕКСАГОНАЛЬНОЙ СЕТКИ
             getShipPositions(row, col, size, orientation) {
                 const positions = [{ row, col }];
                 let currentRow = row;
                 let currentCol = col;
                 
+                // 3 основных направления + обратные = 6 направлений
                 const directions = [
-                    { dr: 0, dc: 1 },   // Вправо (→)
-                    { dr: -1, dc: 1 },  // Вверх-вправо (↗) 
-                    { dr: -1, dc: 0 },  // Вверх-влево (↖)
-                    { dr: 0, dc: -1 },  // Влево (←)
-                    { dr: 1, dc: -1 },  // Вниз-влево (↙)
-                    { dr: 1, dc: 0 }    // Вниз-вправо (↘)
+                    { dr: 1, dc: 0 },   // Вниз (↓) - вертикально
+                    { dr: 0, dc: 1 },   // Вправо (→) - горизонтально в гексагональном смысле
+                    { dr: 1, dc: 1 },   // Диагональ вниз-вправо (↘)
+                    { dr: -1, dc: 0 },  // Вверх (↑) - обратное вертикальное
+                    { dr: 0, dc: -1 },  // Влево (←) - обратное горизонтальное  
+                    { dr: -1, dc: -1 }  // Диагональ вверх-влево (↖) - обратное диагональное
                 ];
                 
                 const dir = directions[orientation];
@@ -860,18 +861,29 @@
                 return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
             }
             
-            // Правильная проверка соседних клеток для гексагональной сетки
+            // ПРАВИЛЬНАЯ ПРОВЕРКА СОСЕДНИХ КЛЕТОК ДЛЯ ГЕКСАГОНАЛЬНОЙ СЕТКИ
             getNeighborCells(row, col) {
                 const neighbors = [];
                 
-                // Базовые направления (соседние гексы)
+                // Все возможные направления для гексагональной сетки
                 const directions = [
+                    // Непосредственные соседи
                     { dr: 0, dc: 1 },   // Вправо
                     { dr: -1, dc: 1 },  // Вверх-вправо
                     { dr: -1, dc: 0 },  // Вверх-влево
                     { dr: 0, dc: -1 },  // Влево
                     { dr: 1, dc: -1 },  // Вниз-влево
-                    { dr: 1, dc: 0 }    // Вниз-вправо
+                    { dr: 1, dc: 0 },   // Вниз-вправо
+                    
+                    // "Диагональные" соседи (через одну клетку)
+                    { dr: -1, dc: 2 },  // 
+                    { dr: -2, dc: 1 },  //
+                    { dr: -2, dc: -1 }, // 
+                    { dr: -1, dc: -2 }, // 
+                    { dr: 1, dc: -2 },  // 
+                    { dr: 2, dc: -1 },  //
+                    { dr: 2, dc: 1 },   //
+                    { dr: 1, dc: 2 }    //
                 ];
                 
                 for (const dir of directions) {
@@ -886,43 +898,38 @@
                 return neighbors;
             }
             
-            // Проверка возможности размещения корабля (без касания других кораблей)
+            // ПРОВЕРКА ВОЗМОЖНОСТИ РАЗМЕЩЕНИЯ КОРАБЛЯ (БЕЗ КАСАНИЯ ДРУГИХ КОРАБЛЕЙ)
             canPlaceShip(positions) {
-                // Сначала проверяем, что все клетки корабля свободны
+                // Проверяем что все клетки корабля свободны
                 for (const pos of positions) {
                     if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
                         return false;
                     }
                 }
                 
-                // Затем проверяем, что вокруг корабля нет других кораблей
-                const occupiedCells = new Set();
+                // Проверяем соседей для ВСЕХ клеток корабля
+                const allNeighbors = new Set();
                 
-                // Добавляем все клетки корабля и их соседей в множество
+                // Собираем всех соседей всех клеток корабля
                 for (const pos of positions) {
-                    // Сама клетка корабля
-                    const key = `${pos.row},${pos.col}`;
-                    occupiedCells.add(key);
-                    
-                    // Соседние клетки
                     const neighbors = this.getNeighborCells(pos.row, pos.col);
                     for (const neighbor of neighbors) {
-                        const neighborKey = `${neighbor.row},${neighbor.col}`;
-                        occupiedCells.add(neighborKey);
+                        const key = `${neighbor.row},${neighbor.col}`;
+                        allNeighbors.add(key);
                     }
                 }
                 
-                // Проверяем, что в этих клетках нет других кораблей
-                for (const key of occupiedCells) {
+                // Проверяем что среди соседей нет других кораблей
+                for (const key of allNeighbors) {
                     const [r, c] = key.split(',').map(Number);
-                    if (this.myBoard[r][c] === 'ship') {
-                        // Проверяем, что этот корабль не является частью размещаемого корабля
-                        const isPartOfCurrentShip = positions.some(pos => 
-                            pos.row === r && pos.col === c
-                        );
-                        if (!isPartOfCurrentShip) {
-                            return false;
-                        }
+                    
+                    // Проверяем что эта клетка не является частью текущего корабля
+                    const isPartOfCurrentShip = positions.some(pos => 
+                        pos.row === r && pos.col === c
+                    );
+                    
+                    if (!isPartOfCurrentShip && this.myBoard[r][c] === 'ship') {
+                        return false;
                     }
                 }
                 
@@ -1309,7 +1316,8 @@
                 // Предпросмотр корабля
                 if (this.gamePhase === 'setup' && this.selectedShip && showShips && this.lastHoveredHex) {
                     const positions = this.getShipPositions(this.lastHoveredHex.row, this.lastHoveredHex.col, this.selectedShip.size, this.shipOrientation);
-                    if (positions) {
+                    
+                    if (positions && positions.length === this.selectedShip.size) { // Проверяем что получили все клетки
                         let valid = this.canPlaceShip(positions);
                         
                         ctx.globalAlpha = 0.6;
@@ -1319,19 +1327,12 @@
                         }
                         ctx.globalAlpha = 1.0;
                         
-                        // Отладочная информация о направлении
-                        if (this.showTouchZones && positions.length > 1) {
-                            const first = this.getHexCenter(positions[0].row, positions[0].col, canvas);
-                            const last = this.getHexCenter(positions[positions.length - 1].row, positions[positions.length - 1].col, canvas);
-                            
-                            ctx.strokeStyle = valid ? 'lime' : 'red';
-                            ctx.lineWidth = 2;
-                            ctx.setLineDash([5, 5]);
-                            ctx.beginPath();
-                            ctx.moveTo(first.x, first.y);
-                            ctx.lineTo(last.x, last.y);
-                            ctx.stroke();
-                            ctx.setLineDash([]);
+                        // Отладочная информация
+                        if (this.showTouchZones) {
+                            ctx.fillStyle = valid ? 'lime' : 'red';
+                            ctx.font = '12px Arial';
+                            ctx.textAlign = 'left';
+                            ctx.fillText(`Корабль: ${positions.length} из ${this.selectedShip.size} клеток`, 10, 30);
                         }
                     }
                 }
