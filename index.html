@@ -123,6 +123,15 @@
             font-weight: bold;
         }
 
+        .direction-hint {
+            color: #FFD700;
+            font-size: 0.8em;
+            margin-top: 5px;
+            background: rgba(255, 215, 0, 0.1);
+            padding: 5px;
+            border-radius: 5px;
+        }
+
         .game-boards {
             display: flex;
             justify-content: center;
@@ -361,6 +370,10 @@
                 <button class="rotation-btn" id="rotateLeft">↶ Повернуть влево</button>
                 <div class="rotation-info" id="rotationInfo">Направление: →</div>
                 <button class="rotation-btn" id="rotateRight">Повернуть вправо ↷</button>
+            </div>
+            
+            <div class="direction-hint">
+                💡 Направления: → (вправо), ↗ (вверх-вправо), ↖ (вверх-влево), ← (влево), ↙ (вниз-влево), ↘ (вниз-вправо)
             </div>
             
             <div class="ship-palette" id="shipPalette">
@@ -812,7 +825,110 @@
                 this.drawBoards();
             }
             
-            // ... остальные методы остаются без изменений ...
+            // Правильные направления для гексагональной сетки (odd-q вертикальная схема)
+            getShipPositions(row, col, size, orientation) {
+                const positions = [{ row, col }];
+                let currentRow = row;
+                let currentCol = col;
+                
+                const directions = [
+                    { dr: 0, dc: 1 },   // Вправо (→)
+                    { dr: -1, dc: 1 },  // Вверх-вправо (↗) 
+                    { dr: -1, dc: 0 },  // Вверх-влево (↖)
+                    { dr: 0, dc: -1 },  // Влево (←)
+                    { dr: 1, dc: -1 },  // Вниз-влево (↙)
+                    { dr: 1, dc: 0 }    // Вниз-вправо (↘)
+                ];
+                
+                const dir = directions[orientation];
+                
+                for (let i = 1; i < size; i++) {
+                    currentRow += dir.dr;
+                    currentCol += dir.dc;
+                    
+                    if (!this.isValidPosition(currentRow, currentCol)) {
+                        return null;
+                    }
+                    
+                    positions.push({ row: currentRow, col: currentCol });
+                }
+                
+                return positions;
+            }
+            
+            isValidPosition(row, col) {
+                return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
+            }
+            
+            // Правильная проверка соседних клеток для гексагональной сетки
+            getNeighborCells(row, col) {
+                const neighbors = [];
+                
+                // Базовые направления (соседние гексы)
+                const directions = [
+                    { dr: 0, dc: 1 },   // Вправо
+                    { dr: -1, dc: 1 },  // Вверх-вправо
+                    { dr: -1, dc: 0 },  // Вверх-влево
+                    { dr: 0, dc: -1 },  // Влево
+                    { dr: 1, dc: -1 },  // Вниз-влево
+                    { dr: 1, dc: 0 }    // Вниз-вправо
+                ];
+                
+                for (const dir of directions) {
+                    const newRow = row + dir.dr;
+                    const newCol = col + dir.dc;
+                    
+                    if (this.isValidPosition(newRow, newCol)) {
+                        neighbors.push({ row: newRow, col: newCol });
+                    }
+                }
+                
+                return neighbors;
+            }
+            
+            // Проверка возможности размещения корабля (без касания других кораблей)
+            canPlaceShip(positions) {
+                // Сначала проверяем, что все клетки корабля свободны
+                for (const pos of positions) {
+                    if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
+                        return false;
+                    }
+                }
+                
+                // Затем проверяем, что вокруг корабля нет других кораблей
+                const occupiedCells = new Set();
+                
+                // Добавляем все клетки корабля и их соседей в множество
+                for (const pos of positions) {
+                    // Сама клетка корабля
+                    const key = `${pos.row},${pos.col}`;
+                    occupiedCells.add(key);
+                    
+                    // Соседние клетки
+                    const neighbors = this.getNeighborCells(pos.row, pos.col);
+                    for (const neighbor of neighbors) {
+                        const neighborKey = `${neighbor.row},${neighbor.col}`;
+                        occupiedCells.add(neighborKey);
+                    }
+                }
+                
+                // Проверяем, что в этих клетках нет других кораблей
+                for (const key of occupiedCells) {
+                    const [r, c] = key.split(',').map(Number);
+                    if (this.myBoard[r][c] === 'ship') {
+                        // Проверяем, что этот корабль не является частью размещаемого корабля
+                        const isPartOfCurrentShip = positions.some(pos => 
+                            pos.row === r && pos.col === c
+                        );
+                        if (!isPartOfCurrentShip) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
             placeShip(row, col, ship, orientation) {
                 const positions = this.getShipPositions(row, col, ship.size, orientation);
                 
@@ -836,44 +952,6 @@
                 
                 this.myShips.push(shipData);
                 return true;
-            }
-            
-            canPlaceShip(positions) {
-                for (const pos of positions) {
-                    if (!this.isValidPosition(pos.row, pos.col) || this.myBoard[pos.row][pos.col] !== '') {
-                        return false;
-                    }
-                    
-                    const neighbors = this.getNeighborCells(pos.row, pos.col);
-                    for (const neighbor of neighbors) {
-                        if (this.myBoard[neighbor.row][neighbor.col] === 'ship') {
-                            return false;
-                        }
-                    }
-                }
-                return true;
-            }
-            
-            getNeighborCells(row, col) {
-                const neighbors = [];
-                const directions = [
-                    { dr: 0, dc: 1 }, { dr: -1, dc: 1 }, { dr: -1, dc: 0 }, 
-                    { dr: 0, dc: -1 }, { dr: 1, dc: -1 }, { dr: 1, dc: 0 },
-                    { dr: -1, dc: 2 }, { dr: -2, dc: 1 }, { dr: -2, dc: -1 },
-                    { dr: -1, dc: -2 }, { dr: 1, dc: -2 }, { dr: 2, dc: -1 },
-                    { dr: 2, dc: 1 }, { dr: 1, dc: 2 }
-                ];
-                
-                for (const dir of directions) {
-                    const newRow = row + dir.dr;
-                    const newCol = col + dir.dc;
-                    
-                    if (this.isValidPosition(newRow, newCol)) {
-                        neighbors.push({ row: newRow, col: newCol });
-                    }
-                }
-                
-                return neighbors;
             }
             
             removeShipAt(row, col) {
@@ -918,36 +996,6 @@
                         shipElement.classList.add('placed');
                     }
                 });
-            }
-            
-            getShipPositions(row, col, size, orientation) {
-                const positions = [{ row, col }];
-                let currentRow = row;
-                let currentCol = col;
-                
-                const directions = [
-                    { dr: 0, dc: 1 }, { dr: -1, dc: 1 }, { dr: -1, dc: 0 },
-                    { dr: 0, dc: -1 }, { dr: 1, dc: -1 }, { dr: 1, dc: 0 }
-                ];
-                
-                const dir = directions[orientation];
-                
-                for (let i = 1; i < size; i++) {
-                    currentRow += dir.dr;
-                    currentCol += dir.dc;
-                    
-                    if (!this.isValidPosition(currentRow, currentCol)) {
-                        return null;
-                    }
-                    
-                    positions.push({ row: currentRow, col: currentCol });
-                }
-                
-                return positions;
-            }
-            
-            isValidPosition(row, col) {
-                return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
             }
             
             randomizeShips() {
@@ -1270,6 +1318,21 @@
                             this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
+                        
+                        // Отладочная информация о направлении
+                        if (this.showTouchZones && positions.length > 1) {
+                            const first = this.getHexCenter(positions[0].row, positions[0].col, canvas);
+                            const last = this.getHexCenter(positions[positions.length - 1].row, positions[positions.length - 1].col, canvas);
+                            
+                            ctx.strokeStyle = valid ? 'lime' : 'red';
+                            ctx.lineWidth = 2;
+                            ctx.setLineDash([5, 5]);
+                            ctx.beginPath();
+                            ctx.moveTo(first.x, first.y);
+                            ctx.lineTo(last.x, last.y);
+                            ctx.stroke();
+                            ctx.setLineDash([]);
+                        }
                     }
                 }
             }
@@ -1343,7 +1406,7 @@
                 }
             }
             
-            // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ (остается без изменений)
+            // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ
             createOnlineGame() {
                 this.isOnline = true;
                 this.isHost = true;
