@@ -736,7 +736,7 @@
                 this.drawBoards();
             }
             
-            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - полная синхронизация с отрисовкой
+            // ИСПРАВЛЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ - с компенсацией сдвига
             getHexAtPosition(x, y, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
@@ -746,22 +746,32 @@
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
-                // Проверяем все ячейки в правильном порядке
+                // Компенсация сдвига - добавляем небольшую поправку
+                const shiftX = 0; // Можно настроить если нужно
+                const shiftY = 0; // Можно настроить если нужно
+                
+                let closestHex = null;
+                let minDistance = Infinity;
+                
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        const hexX = offsetX + col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
+                        const hexY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
                         
                         // Упрощенная проверка расстояния до центра
                         const distance = Math.sqrt((x - hexX) ** 2 + (y - hexY) ** 2);
                         
                         // Если точка достаточно близко к центру ячейки
                         if (distance < hexSize * 0.8) {
-                            return { row, col, hexX, hexY };
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestHex = { row, col, hexX, hexY };
+                            }
                         }
                     }
                 }
-                return null;
+                
+                return closestHex;
             }
             
             getHexSize(canvas) {
@@ -1210,10 +1220,14 @@
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
+                // Компенсация сдвига - такая же как в getHexAtPosition
+                const shiftX = 0;
+                const shiftY = 0;
+                
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
+                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
                         
                         // Проверяем, является ли эта ячейка последней нажатой
                         const isLastClicked = 
@@ -1234,8 +1248,8 @@
                         
                         ctx.globalAlpha = 0.6;
                         for (const pos of positions) {
-                            const x = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2;
-                            const y = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
+                            const x = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
+                            const y = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
                             this.drawHex(ctx, x, y, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
@@ -1337,14 +1351,18 @@
                 const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
                 const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
                 
+                // Такая же компенсация сдвига
+                const shiftX = 0;
+                const shiftY = 0;
+                
                 ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
                 ctx.lineWidth = 1;
                 ctx.fillStyle = 'rgba(255, 0, 255, 0.1)';
                 
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2 + shiftX;
+                        const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2 + shiftY;
                         
                         // Рисуем круг зоны клика
                         ctx.beginPath();
