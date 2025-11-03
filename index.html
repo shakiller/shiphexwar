@@ -401,6 +401,12 @@
                 this.myCtx = this.myBoardCanvas.getContext('2d');
                 this.opponentCtx = this.opponentBoardCanvas.getContext('2d');
                 
+                // Принудительно устанавливаем размеры canvas
+                this.myBoardCanvas.width = 500;
+                this.myBoardCanvas.height = 500;
+                this.opponentBoardCanvas.width = 500;
+                this.opponentBoardCanvas.height = 500;
+                
                 // Переменные для отслеживания мыши
                 this.currentMouseX = 0;
                 this.currentMouseY = 0;
@@ -632,32 +638,38 @@
                 });
             }
             
-            // ПРОСТОЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
-            getHexAtPosition(x, y, canvas) {
+            // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА - используется везде
+            getHexCenter(row, col, canvas) {
                 const hexSize = this.getHexSize(canvas);
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Вычисляем отступы как в drawBoard
-                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
+                // Точные формулы для центрирования
+                const totalWidth = this.boardSize * hexWidth * 0.75 - hexWidth * 0.25;
+                const totalHeight = this.boardSize * hexHeight + hexHeight * 0.5;
+                
+                const offsetX = (canvas.width - totalWidth) / 2;
+                const offsetY = (canvas.height - totalHeight) / 2;
+                
+                const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                
+                return { x, y, hexSize };
+            }
 
-                // ПРОСТОЙ ПЕРЕБОР ВСЕХ ЯЧЕЕК
+            // УПРОЩЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
+            getHexAtPosition(x, y, canvas) {
+                // Простой перебор всех ячеек
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        // ВЫЧИСЛЯЕМ КООРДИНАТЫ ЦЕНТРА ТОЧНО КАК В drawBoard
-                        const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                        const center = this.getHexCenter(row, col, canvas);
+                        const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
                         
-                        // ПРОСТАЯ ПРОВЕРКА РАССТОЯНИЯ
-                        const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-                        
-                        // Увеличим радиус определения для надежности
-                        if (distance < hexSize * 1.2) {
+                        if (distance < center.hexSize * 0.8) {
                             document.getElementById('coordsInfo').textContent = 
-                                `Ячейка [${row},${col}] | Центр: [${Math.floor(centerX)},${Math.floor(centerY)}] | ` +
+                                `Ячейка [${row},${col}] | Центр: [${Math.floor(center.x)},${Math.floor(center.y)}] | ` +
                                 `Клик: [${Math.floor(x)},${Math.floor(y)}] | Расстояние: ${Math.floor(distance)}`;
-                            return { row, col, hexX: centerX, hexY: centerY, distance };
+                            return { row, col, hexX: center.x, hexY: center.y, distance };
                         }
                     }
                 }
@@ -666,10 +678,16 @@
                     `Клик: [${Math.floor(x)},${Math.floor(y)}] | ЯЧЕЙКА НЕ НАЙДЕНА`;
                 return null;
             }
-            
+
             getHexSize(canvas) {
-                // ФИКСИРОВАННЫЙ РАЗМЕР для точности
-                return 30;
+                // Рассчитываем размер на основе реальных размеров canvas
+                const availableWidth = canvas.width - 40; // Отступы
+                const availableHeight = canvas.height - 40;
+                
+                const hexWidthByCols = availableWidth / (this.boardSize * 1.5 + 0.5);
+                const hexHeightByRows = availableHeight / (this.boardSize * Math.sqrt(3) + 1);
+                
+                return Math.min(hexWidthByCols, hexHeightByRows * 2) / 2;
             }
             
             handleMyBoardClick(event) {
@@ -679,17 +697,23 @@
                 const x = event.clientX - rect.left;
                 const y = event.clientY - rect.top;
                 
-                console.log(`Клик по моему полю: x=${x}, y=${y}`);
+                console.log('=== КЛИК ПО МОЕМУ ПОЛЮ ===');
+                console.log('Координаты мыши:', x, y);
+                console.log('Размер canvas:', this.myBoardCanvas.width, this.myBoardCanvas.height);
                 
                 const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
                 
                 const debugInfo = document.getElementById('debugInfo');
                 
                 if (hex) {
-                    console.log(`Найдена ячейка: row=${hex.row}, col=${hex.col}`);
+                    console.log('Найдена ячейка:', hex.row, hex.col);
+                    console.log('Центр ячейки:', hex.hexX, hex.hexY);
+                    console.log('Расстояние:', hex.distance);
+                    
                     debugInfo.innerHTML = `Клик: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
                                           Ячейка: строка=${hex.row}, столбец=${hex.col}<br>
-                                          Расстояние до центра: ${Math.floor(hex.distance)}`;
+                                          Центр: [${Math.floor(hex.hexX)},${Math.floor(hex.hexY)}]<br>
+                                          Расстояние: ${Math.floor(hex.distance)}`;
                     debugInfo.style.display = 'block';
                     
                     // Сохраняем последний клик
@@ -751,7 +775,8 @@
                     console.log(`Найдена ячейка: row=${hex.row}, col=${hex.col}`);
                     debugInfo.innerHTML = `Выстрел: x=${Math.floor(x)}, y=${Math.floor(y)}<br>
                                           Ячейка: строка=${hex.row}, столбец=${hex.col}<br>
-                                          Расстояние до центра: ${Math.floor(hex.distance)}`;
+                                          Центр: [${Math.floor(hex.hexX)},${Math.floor(hex.hexY)}]<br>
+                                          Расстояние: ${Math.floor(hex.distance)}`;
                     debugInfo.style.display = 'block';
                     
                     // Сохраняем последний клик
@@ -1199,63 +1224,54 @@
             }
             
             drawBoard(ctx, canvas, board, ships, showShips) {
-                const hexSize = this.getHexSize(canvas);
-                const hexHeight = hexSize * Math.sqrt(3);
-                const hexWidth = hexSize * 2;
-                
-                const offsetX = (canvas.width - (this.boardSize * hexWidth * 0.75 - hexWidth * 0.25)) / 2;
-                const offsetY = (canvas.height - (this.boardSize * hexHeight + hexHeight * 0.5)) / 2;
-                
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // ОТЛАДОЧНАЯ СЕТКА - показываем ВСЕ центры
+                // ОТЛАДКА: информация о размерах
                 if (this.showTouchZones) {
+                    const hexSize = this.getHexSize(canvas);
                     ctx.fillStyle = 'red';
-                    ctx.font = '10px Arial';
-                    ctx.textAlign = 'center';
-                    
-                    for (let row = 0; row < this.boardSize; row++) {
-                        for (let col = 0; col < this.boardSize; col++) {
-                            const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                            const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
-                            
-                            // Красная точка в центре
-                            ctx.beginPath();
-                            ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-                            ctx.fill();
-                            
-                            // Зеленая зона клика
-                            ctx.strokeStyle = 'lime';
-                            ctx.lineWidth = 1;
-                            ctx.beginPath();
-                            ctx.arc(centerX, centerY, hexSize * 1.2, 0, Math.PI * 2);
-                            ctx.stroke();
-                            
-                            // Координаты
-                            ctx.fillStyle = 'yellow';
-                            ctx.fillText(`${row},${col}`, centerX, centerY - 10);
-                            ctx.fillStyle = 'red';
-                        }
-                    }
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(`Размер гекса: ${Math.floor(hexSize)}px | Canvas: ${canvas.width}x${canvas.height}`, 10, 15);
                 }
                 
-                // Теперь рисуем гексы поверх отладочной сетки
+                // Рисуем все гексы используя ОДИН метод вычисления координат
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        const centerX = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
-                        const centerY = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
-                        
+                        const center = this.getHexCenter(row, col, canvas);
                         const isLastClicked = 
                             (showShips && this.lastClickedHexMyBoard && 
                              this.lastClickedHexMyBoard.row === row && this.lastClickedHexMyBoard.col === col) ||
                             (!showShips && this.lastClickedHexOpponentBoard && 
                              this.lastClickedHexOpponentBoard.row === row && this.lastClickedHexOpponentBoard.col === col);
                         
-                        this.drawHex(ctx, centerX, centerY, hexSize, board[row][col], showShips, row, col, isLastClicked);
+                        this.drawHex(ctx, center.x, center.y, center.hexSize, board[row][col], showShips, row, col, isLastClicked);
+                        
+                        // ОТЛАДКА: центры и зоны клика
+                        if (this.showTouchZones) {
+                            // Красная точка в центре
+                            ctx.fillStyle = 'red';
+                            ctx.beginPath();
+                            ctx.arc(center.x, center.y, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Зеленая зона клика
+                            ctx.strokeStyle = 'lime';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.arc(center.x, center.y, center.hexSize * 0.8, 0, Math.PI * 2);
+                            ctx.stroke();
+                            
+                            // Координаты
+                            ctx.fillStyle = 'yellow';
+                            ctx.font = '10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(`${row},${col}`, center.x, center.y - 15);
+                        }
                     }
                 }
                 
-                // Рисуем предпросмотр корабля
+                // Предпросмотр корабля
                 if (this.gamePhase === 'setup' && this.selectedShip && showShips && this.lastHoveredHex) {
                     const positions = this.getShipPositions(this.lastHoveredHex.row, this.lastHoveredHex.col, this.selectedShip.size, this.shipOrientation);
                     if (positions) {
@@ -1263,9 +1279,8 @@
                         
                         ctx.globalAlpha = 0.6;
                         for (const pos of positions) {
-                            const centerX = offsetX + pos.col * hexWidth * 0.75 + hexWidth / 2;
-                            const centerY = offsetY + pos.row * hexHeight + (pos.col % 2) * hexHeight / 2 + hexHeight / 2;
-                            this.drawHex(ctx, centerX, centerY, hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
+                            const center = this.getHexCenter(pos.row, pos.col, canvas);
+                            this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
                         }
                         ctx.globalAlpha = 1.0;
                     }
