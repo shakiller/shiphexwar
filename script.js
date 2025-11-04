@@ -56,6 +56,12 @@ class HexagonalBattleship {
         this.testMode = false;
         this.testLines = [];
         
+        // Переменные для бота
+        this.botDifficulty = 'normal'; // normal, hard
+        this.botLastHit = null;
+        this.botTargetMode = false;
+        this.botPotentialTargets = [];
+        
         this.initializeGame();
         this.setupEventListeners();
         this.createShipPalette();
@@ -98,6 +104,11 @@ class HexagonalBattleship {
         this.lastHoveredHex = null;
         this.lastClickedHexMyBoard = null;
         this.lastClickedHexOpponentBoard = null;
+        
+        // Сброс состояния бота
+        this.botLastHit = null;
+        this.botTargetMode = false;
+        this.botPotentialTargets = [];
         
         this.updateGamePhase();
         this.updateScores();
@@ -831,6 +842,104 @@ class HexagonalBattleship {
         }
     }
     
+    // МЕТОД ДЛЯ АВТОМАТИЧЕСКОГО РАЗМЕЩЕНИЯ КОРАБЛЕЙ БОТА
+    randomizeOpponentShips() {
+        this.opponentBoard = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(''));
+        this.opponentShips = [];
+        
+        let totalAttempts = 0;
+        const MAX_TOTAL_ATTEMPTS = 2000;
+        
+        this.ships.forEach((shipType, typeIndex) => {
+            for (let i = 0; i < shipType.count; i++) {
+                let placed = false;
+                let attempts = 0;
+                const MAX_ATTEMPTS_PER_SHIP = 200;
+                
+                while (!placed && attempts < MAX_ATTEMPTS_PER_SHIP && totalAttempts < MAX_TOTAL_ATTEMPTS) {
+                    const row = Math.floor(Math.random() * this.boardSize);
+                    const col = Math.floor(Math.random() * this.boardSize);
+                    const orientation = Math.floor(Math.random() * 6);
+                    
+                    const ship = {
+                        typeIndex: typeIndex,
+                        instance: i,
+                        size: shipType.size
+                    };
+                    
+                    const positions = this.getShipPositions(row, col, ship.size, orientation);
+                    
+                    if (positions && this.canPlaceShipOpponent(positions)) {
+                        const shipData = {
+                            positions: positions,
+                            hits: Array(shipType.size).fill(false),
+                            size: shipType.size,
+                            typeIndex: typeIndex,
+                            instance: i
+                        };
+                        
+                        for (const pos of positions) {
+                            this.opponentBoard[pos.row][pos.col] = 'ship';
+                        }
+                        
+                        this.opponentShips.push(shipData);
+                        placed = true;
+                    }
+                    attempts++;
+                    totalAttempts++;
+                }
+                
+                if (!placed) {
+                    console.warn(`Бот: не удалось разместить корабль ${shipType.name} (${shipType.size}) после ${attempts} попыток`);
+                }
+            }
+        });
+    }
+    
+    // ПРОВЕРКА ВОЗМОЖНОСТИ РАЗМЕЩЕНИЯ КОРАБЛЯ ДЛЯ БОТА
+    canPlaceShipOpponent(positions) {
+        // Проверяем что все клетки корабля свободны
+        for (const pos of positions) {
+            if (!this.isValidPosition(pos.row, pos.col) || this.opponentBoard[pos.row][pos.col] !== '') {
+                return false;
+            }
+        }
+        
+        // Создаем множество всех запрещенных клеток (сам корабль + все его соседи)
+        const forbiddenCells = new Set();
+        
+        // Добавляем все клетки корабля и всех их соседей
+        for (const pos of positions) {
+            // Добавляем саму клетку корабля
+            const cellKey = `${pos.row},${pos.col}`;
+            forbiddenCells.add(cellKey);
+            
+            // Добавляем всех соседей этой клетки
+            const neighbors = this.getNeighborCells(pos.row, pos.col);
+            for (const neighbor of neighbors) {
+                const neighborKey = `${neighbor.row},${neighbor.col}`;
+                forbiddenCells.add(neighborKey);
+            }
+        }
+        
+        // Проверяем что среди запрещенных клеток нет других кораблей
+        for (const key of forbiddenCells) {
+            const [r, c] = key.split(',').map(Number);
+            
+            // Проверяем что эта клетка не является частью текущего корабля
+            const isPartOfCurrentShip = positions.some(pos => 
+                pos.row === r && pos.col === c
+            );
+            
+            // Если клетка не часть текущего корабля, но занята другим кораблем - нельзя разместить
+            if (!isPartOfCurrentShip && this.opponentBoard[r][c] === 'ship') {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
     allShipsPlaced() {
         let totalShips = 0;
         this.ships.forEach(shipType => {
@@ -842,6 +951,11 @@ class HexagonalBattleship {
     
     startBattle() {
         if (!this.allShipsPlaced()) return;
+        
+        // В локальном режиме автоматически размещаем корабли бота
+        if (!this.isOnline) {
+            this.randomizeOpponentShips();
+        }
         
         this.gamePhase = 'battle';
         this.currentPlayer = 'me';
@@ -891,6 +1005,13 @@ class HexagonalBattleship {
             return;
         }
         
+        // В локальном режиме передаем ход боту если промах
+        if (!this.isOnline && !hit) {
+            this.currentPlayer = 'opponent';
+            this.updateGamePhase();
+            setTimeout(() => this.makeBotMove(), 800);
+        }
+        
         if (this.isOnline) {
             this.sendData({
                 type: 'shot',
@@ -904,35 +1025,92 @@ class HexagonalBattleship {
                 this.currentPlayer = 'opponent';
                 this.updateGamePhase();
             }
-        } else {
-            if (!hit) {
-                this.currentPlayer = 'opponent';
-                this.updateGamePhase();
-                setTimeout(() => this.makeBotMove(), 800);
-            }
         }
     }
     
+    // УЛУЧШЕННЫЙ МЕТОД ХОДА БОТА
     makeBotMove() {
         if (this.gamePhase !== 'battle' || this.currentPlayer !== 'opponent') return;
         
         let row, col;
-        let attempts = 0;
         
-        do {
-            row = Math.floor(Math.random() * this.boardSize);
-            col = Math.floor(Math.random() * this.boardSize);
-            attempts++;
-        } while (this.isAlreadyShot(row, col, this.opponentShots) && attempts < 100);
+        // Умный бот: если есть попадание, ищем в соседних клетках
+        if (this.botLastHit && this.botTargetMode) {
+            const target = this.getNextTarget();
+            if (target) {
+                row = target.row;
+                col = target.col;
+            } else {
+                // Если целей нет, переходим в случайный режим
+                this.botTargetMode = false;
+                this.botLastHit = null;
+                this.botPotentialTargets = [];
+                return this.makeBotMove(); // Рекурсивно вызываем снова
+            }
+        } else {
+            // Случайный выстрел
+            let attempts = 0;
+            do {
+                row = Math.floor(Math.random() * this.boardSize);
+                col = Math.floor(Math.random() * this.boardSize);
+                attempts++;
+            } while (this.isAlreadyShot(row, col, this.opponentShots) && attempts < 100);
+            
+            if (attempts >= 100) {
+                // Если не нашли свободную клетку, ищем любую доступную
+                for (let r = 0; r < this.boardSize; r++) {
+                    for (let c = 0; c < this.boardSize; c++) {
+                        if (!this.isAlreadyShot(r, c, this.opponentShots)) {
+                            row = r;
+                            col = c;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         
-        if (attempts < 100) {
-            this.receiveShot(row, col);
+        if (row !== undefined && col !== undefined) {
+            this.receiveBotShot(row, col);
         }
     }
     
-    receiveShot(row, col) {
-        if (this.gamePhase !== 'battle') return;
+    // ПОЛУЧЕНИЕ СЛЕДУЮЩЕЙ ЦЕЛИ ДЛЯ БОТА
+    getNextTarget() {
+        if (this.botPotentialTargets.length > 0) {
+            return this.botPotentialTargets.shift();
+        }
         
+        // Генерируем новые цели вокруг последнего попадания
+        const directions = [0, 1, 2, 3, 4, 5]; // Все 6 направлений
+        
+        for (const dir of directions) {
+            const nextPos = this.getNextHexInDirection(this.botLastHit.row, this.botLastHit.col, dir);
+            if (nextPos && 
+                this.isValidPosition(nextPos.row, nextPos.col) && 
+                !this.isAlreadyShot(nextPos.row, nextPos.col, this.opponentShots)) {
+                this.botPotentialTargets.push(nextPos);
+            }
+        }
+        
+        // Перемешиваем цели для разнообразия
+        this.botPotentialTargets = this.shuffleArray(this.botPotentialTargets);
+        
+        return this.botPotentialTargets.length > 0 ? this.botPotentialTargets.shift() : null;
+    }
+    
+    // ПЕРЕМЕШИВАНИЕ МАССИВА
+    shuffleArray(array) {
+        const newArray = [...array];
+        for (let i = newArray.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+        }
+        return newArray;
+    }
+    
+    // ОБРАБОТКА ВЫСТРЕЛА БОТА
+    receiveBotShot(row, col) {
         this.opponentShots.push({ row, col });
         
         let hit = false;
@@ -945,8 +1123,18 @@ class HexagonalBattleship {
                     hit = true;
                     ship.hits[i] = true;
                     
+                    // Обновляем логику бота при попадании
+                    if (!this.botTargetMode) {
+                        this.botTargetMode = true;
+                        this.botLastHit = { row, col };
+                    }
+                    
                     if (ship.hits.every(h => h)) {
                         sunkShip = ship;
+                        // Если корабль потоплен, сбрасываем режим преследования
+                        this.botTargetMode = false;
+                        this.botLastHit = null;
+                        this.botPotentialTargets = [];
                     }
                     break;
                 }
@@ -966,23 +1154,66 @@ class HexagonalBattleship {
             return;
         }
         
-        if (this.isOnline) {
-            this.sendData({
-                type: 'shot_result',
-                row: row,
-                col: col,
-                hit: hit,
-                sunkShip: sunkShip
-            });
-            
-            if (!hit) {
-                this.currentPlayer = 'me';
-                this.updateGamePhase();
-            }
+        // Если бот попал, он ходит снова
+        if (hit) {
+            setTimeout(() => this.makeBotMove(), 800);
         } else {
-            if (!hit) {
-                this.currentPlayer = 'me';
+            // Если промах, ход переходит игроку
+            this.currentPlayer = 'me';
+            this.updateGamePhase();
+        }
+    }
+    
+    // СТАРЫЙ МЕТОД ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
+    receiveShot(row, col) {
+        if (this.isOnline) {
+            // Онлайн-логика
+            this.opponentShots.push({ row, col });
+            
+            let hit = false;
+            let sunkShip = null;
+            
+            for (const ship of this.myShips) {
+                for (let i = 0; i < ship.positions.length; i++) {
+                    const pos = ship.positions[i];
+                    if (pos.row === row && pos.col === col) {
+                        hit = true;
+                        ship.hits[i] = true;
+                        
+                        if (ship.hits.every(h => h)) {
+                            sunkShip = ship;
+                        }
+                        break;
+                    }
+                }
+                if (hit) break;
+            }
+            
+            this.myBoard[row][col] = hit ? 'hit' : 'miss';
+            
+            this.drawBoards();
+            this.updateScores();
+            
+            if (this.checkGameOver()) {
+                this.gamePhase = 'gameover';
                 this.updateGamePhase();
+                setTimeout(() => alert('Противник победил!'), 100);
+                return;
+            }
+            
+            if (this.isOnline) {
+                this.sendData({
+                    type: 'shot_result',
+                    row: row,
+                    col: col,
+                    hit: hit,
+                    sunkShip: sunkShip
+                });
+                
+                if (!hit) {
+                    this.currentPlayer = 'me';
+                    this.updateGamePhase();
+                }
             }
         }
     }
@@ -1006,7 +1237,7 @@ class HexagonalBattleship {
                 phaseElement.textContent = 'Фаза расстановки кораблей';
                 break;
             case 'battle':
-                phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Противника'}`;
+                phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Бота'}`;
                 break;
             case 'gameover':
                 phaseElement.textContent = 'Игра завершена';
