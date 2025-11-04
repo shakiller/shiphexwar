@@ -638,28 +638,17 @@ class HexagonalBattleship {
     getNeighborCells(row, col) {
         const neighbors = [];
         
-        // 6 направлений для гексагональной сетки
-        const directions = [
-            { dr: 1, dc: 0 },   // Вниз
-            { dr: 1, dc: 1 },   // Вниз-вправо
-            { dr: 1, dc: -1 },  // Вниз-влево
-            { dr: -1, dc: 0 },  // Вверх
-            { dr: -1, dc: -1 }, // Вверх-влево
-            { dr: -1, dc: 1 }   // Вверх-вправо
-        ];
-        
-        for (const dir of directions) {
-            const newRow = row + dir.dr;
-            const newCol = col + dir.dc;
-            
-            if (this.isValidPosition(newRow, newCol)) {
-                neighbors.push({ row: newRow, col: newCol });
+        // Все 6 направлений для гексагональной сетки
+        for (let direction = 0; direction < 6; direction++) {
+            const neighbor = this.getNextHexInDirection(row, col, direction);
+            if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
+                neighbors.push(neighbor);
             }
         }
         
         return neighbors;
     }
-    
+
     // ПРОВЕРКА ВОЗМОЖНОСТИ РАЗМЕЩЕНИЯ КОРАБЛЯ (БЕЗ КАСАНИЯ ДРУГИХ КОРАБЛЕЙ)
     canPlaceShip(positions) {
         // Проверяем что все клетки корабля свободны
@@ -669,20 +658,25 @@ class HexagonalBattleship {
             }
         }
         
-        // Проверяем соседей для ВСЕХ клеток корабля
-        const allNeighbors = new Set();
+        // Создаем множество всех запрещенных клеток (сам корабль + все его соседи)
+        const forbiddenCells = new Set();
         
-        // Собираем всех соседей всех клеток корабля
+        // Добавляем все клетки корабля и всех их соседей
         for (const pos of positions) {
+            // Добавляем саму клетку корабля
+            const cellKey = `${pos.row},${pos.col}`;
+            forbiddenCells.add(cellKey);
+            
+            // Добавляем всех соседей этой клетки
             const neighbors = this.getNeighborCells(pos.row, pos.col);
             for (const neighbor of neighbors) {
-                const key = `${neighbor.row},${neighbor.col}`;
-                allNeighbors.add(key);
+                const neighborKey = `${neighbor.row},${neighbor.col}`;
+                forbiddenCells.add(neighborKey);
             }
         }
         
-        // Проверяем что среди соседей нет других кораблей
-        for (const key of allNeighbors) {
+        // Проверяем что среди запрещенных клеток нет других кораблей
+        for (const key of forbiddenCells) {
             const [r, c] = key.split(',').map(Number);
             
             // Проверяем что эта клетка не является частью текущего корабля
@@ -690,6 +684,7 @@ class HexagonalBattleship {
                 pos.row === r && pos.col === c
             );
             
+            // Если клетка не часть текущего корабля, но занята другим кораблем - нельзя разместить
             if (!isPartOfCurrentShip && this.myBoard[r][c] === 'ship') {
                 return false;
             }
@@ -770,12 +765,16 @@ class HexagonalBattleship {
     randomizeShips() {
         this.initializeGame();
         
+        let totalAttempts = 0;
+        const MAX_TOTAL_ATTEMPTS = 2000; // Общее ограничение попыток
+        
         this.ships.forEach((shipType, typeIndex) => {
             for (let i = 0; i < shipType.count; i++) {
                 let placed = false;
                 let attempts = 0;
+                const MAX_ATTEMPTS_PER_SHIP = 200; // Ограничение попыток на один корабль
                 
-                while (!placed && attempts < 500) {
+                while (!placed && attempts < MAX_ATTEMPTS_PER_SHIP && totalAttempts < MAX_TOTAL_ATTEMPTS) {
                     const row = Math.floor(Math.random() * this.boardSize);
                     const col = Math.floor(Math.random() * this.boardSize);
                     const orientation = Math.floor(Math.random() * 6);
@@ -805,6 +804,11 @@ class HexagonalBattleship {
                         placed = true;
                     }
                     attempts++;
+                    totalAttempts++;
+                }
+                
+                if (!placed) {
+                    console.warn(`Не удалось разместить корабль ${shipType.name} (${shipType.size}) после ${attempts} попыток`);
                 }
             }
         });
@@ -822,6 +826,8 @@ class HexagonalBattleship {
                     ships: this.myShips
                 });
             }
+        } else {
+            console.warn("Не все корабли удалось разместить автоматически");
         }
     }
     
