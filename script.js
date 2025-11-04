@@ -52,6 +52,10 @@ class HexagonalBattleship {
         this.isHost = false;
         this.roomId = null;
         
+        // Переменные для тестового режима
+        this.testMode = false;
+        this.testLines = [];
+        
         this.initializeGame();
         this.setupEventListeners();
         this.createShipPalette();
@@ -154,6 +158,9 @@ class HexagonalBattleship {
         document.getElementById('rotateRight').addEventListener('click', () => this.rotateRight());
         document.getElementById('toggleTouchZones').addEventListener('click', () => this.toggleTouchZones());
         
+        // Добавляем обработчик для тестового режима
+        document.getElementById('toggleTestMode').addEventListener('click', () => this.toggleTestMode());
+        
         document.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'к' || e.key === 'R' || e.key === 'Й') {
                 this.rotateRight();
@@ -166,6 +173,24 @@ class HexagonalBattleship {
         window.addEventListener('resize', () => {
             this.drawBoards();
         });
+    }
+    
+    toggleTestMode() {
+        this.testMode = !this.testMode;
+        const testInfo = document.getElementById('testInfo');
+        const toggleBtn = document.getElementById('toggleTestMode');
+        
+        if (this.testMode) {
+            testInfo.style.display = 'block';
+            toggleBtn.textContent = 'Выключить тестовый режим направлений';
+            toggleBtn.style.background = '#F44336';
+        } else {
+            testInfo.style.display = 'none';
+            toggleBtn.textContent = 'Включить тестовый режим направлений';
+            toggleBtn.style.background = '#FF9800';
+            this.testLines = [];
+            this.drawBoards();
+        }
     }
     
     toggleTouchZones() {
@@ -311,6 +336,11 @@ class HexagonalBattleship {
     }
     
     handleMyBoardClick(x, y) {
+        if (this.testMode) {
+            this.handleTestClick(x, y);
+            return;
+        }
+        
         if (this.gamePhase !== 'setup') return;
         
         console.log('=== КЛИК ПО МОЕМУ ПОЛЮ ===');
@@ -373,6 +403,108 @@ class HexagonalBattleship {
         }
         
         this.drawBoards();
+    }
+    
+    handleTestClick(x, y) {
+        const hex = this.getHexAtPosition(x, y, this.myBoardCanvas);
+        
+        if (hex) {
+            this.testLines = [];
+            const directions = [
+                { name: "Вертикаль (↓/↑)", dirs: [0, 3] },
+                { name: "Диагональ 1 (↘/↖)", dirs: [1, 4] },
+                { name: "Диагональ 2 (↙/↗)", dirs: [2, 5] }
+            ];
+            
+            directions.forEach((direction, index) => {
+                const lineCells = this.getTestLine(hex.row, hex.col, direction.dirs);
+                this.testLines.push({
+                    name: direction.name,
+                    cells: lineCells,
+                    colorIndex: index
+                });
+            });
+            
+            this.displayTestResults(hex);
+            this.drawBoards();
+        }
+    }
+    
+    getTestLine(startRow, startCol, directions) {
+        const cells = [{ row: startRow, col: startCol }];
+        
+        // Проходим в обоих направлениях для каждой пары
+        directions.forEach(dir => {
+            let currentRow = startRow;
+            let currentCol = startCol;
+            let step = 0;
+            
+            while (true) {
+                const nextPos = this.getNextHexInDirection(currentRow, currentCol, dir, step);
+                if (!nextPos || !this.isValidPosition(nextPos.row, nextPos.col)) break;
+                
+                // Проверяем, не добавили ли мы уже эту клетку
+                const alreadyExists = cells.some(cell => 
+                    cell.row === nextPos.row && cell.col === nextPos.col
+                );
+                
+                if (!alreadyExists) {
+                    cells.push({ row: nextPos.row, col: nextPos.col });
+                }
+                
+                currentRow = nextPos.row;
+                currentCol = nextPos.col;
+                step++;
+            }
+        });
+        
+        return cells;
+    }
+    
+    getNextHexInDirection(row, col, direction, step) {
+        // Упрощенная версия без чередования шагов
+        const directions = [
+            // 0: Вертикаль вниз (↓)
+            () => ({ row: row + 1, col: col }),
+            // 1: Диагональ вниз-вправо (↘)
+            () => ({ row: row, col: col + 1 }),
+            // 2: Диагональ вниз-влево (↙) 
+            () => ({ row: row, col: col - 1 }),
+            // 3: Вертикаль вверх (↑)
+            () => ({ row: row - 1, col: col }),
+            // 4: Диагональ вверх-влево (↖)
+            () => ({ row: row - 1, col: col - 1 }),
+            // 5: Диагональ вверх-вправо (↗)
+            () => ({ row: row - 1, col: col + 1 })
+        ];
+        
+        if (direction < directions.length) {
+            return directions[direction]();
+        }
+        return null;
+    }
+    
+    displayTestResults(hex) {
+        const resultsDiv = document.getElementById('testResults');
+        resultsDiv.innerHTML = '';
+        
+        const header = document.createElement('div');
+        header.innerHTML = `<strong>Центральная клетка: [${hex.row},${hex.col}]</strong>`;
+        resultsDiv.appendChild(header);
+        
+        this.testLines.forEach((line, index) => {
+            const lineDiv = document.createElement('div');
+            lineDiv.className = `test-line line-${index}`;
+            
+            const cellsText = line.cells.map(cell => `[${cell.row},${cell.col}]`).join(' → ');
+            lineDiv.innerHTML = `
+                <strong>${line.name}:</strong><br>
+                Клетки: ${cellsText}<br>
+                Длина: ${line.cells.length} клеток
+            `;
+            
+            resultsDiv.appendChild(lineDiv);
+        });
     }
     
     handleOpponentBoardClick(x, y) {
@@ -913,6 +1045,11 @@ class HexagonalBattleship {
             }
         }
         
+        // Отрисовываем тестовые линии если в тестовом режиме
+        if (this.testMode && showShips && this.testLines.length > 0) {
+            this.drawTestLines(ctx, canvas);
+        }
+        
         // Предпросмотр корабля
         if (this.gamePhase === 'setup' && this.selectedShip && showShips && this.lastHoveredHex) {
             const positions = this.getShipPositions(this.lastHoveredHex.row, this.lastHoveredHex.col, this.selectedShip.size, this.shipOrientation);
@@ -936,6 +1073,42 @@ class HexagonalBattleship {
                 }
             }
         }
+    }
+    
+    drawTestLines(ctx, canvas) {
+        this.testLines.forEach((line, lineIndex) => {
+            const colors = ['#ff0000', '#00ff00', '#0000ff'];
+            const color = colors[lineIndex];
+            
+            line.cells.forEach(cell => {
+                const center = this.getHexCenter(cell.row, cell.col, canvas);
+                
+                // Рисуем подсветку для тестовой клетки
+                ctx.fillStyle = color + '40'; // прозрачный цвет
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 3 * i;
+                    const hexX = center.x + center.hexSize * Math.cos(angle);
+                    const hexY = center.y + center.hexSize * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(hexX, hexY);
+                    else ctx.lineTo(hexX, hexY);
+                }
+                ctx.closePath();
+                ctx.fill();
+                
+                // Обводим границу
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Добавляем номер линии
+                ctx.fillStyle = color;
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(lineIndex.toString(), center.x, center.y);
+            });
+        });
     }
     
     drawHex(ctx, x, y, hexSize, state, showShips, row, col, isLastClicked) {
