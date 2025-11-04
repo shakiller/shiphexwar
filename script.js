@@ -430,6 +430,7 @@ class HexagonalBattleship {
         }
     }
     
+    // ПРАВИЛЬНЫЙ метод для получения тестовой линии
     getTestLine(startRow, startCol, directions) {
         const cells = [{ row: startRow, col: startCol }];
         
@@ -437,10 +438,10 @@ class HexagonalBattleship {
         directions.forEach(dir => {
             let currentRow = startRow;
             let currentCol = startCol;
-            let step = 0;
             
+            // Двигаемся в одном направлении
             while (true) {
-                const nextPos = this.getNextHexInDirection(currentRow, currentCol, dir, step);
+                const nextPos = this.getNextHexInDirection(currentRow, currentCol, dir);
                 if (!nextPos || !this.isValidPosition(nextPos.row, nextPos.col)) break;
                 
                 // Проверяем, не добавили ли мы уже эту клетку
@@ -450,48 +451,69 @@ class HexagonalBattleship {
                 
                 if (!alreadyExists) {
                     cells.push({ row: nextPos.row, col: nextPos.col });
+                } else {
+                    break; // Прерываем если нашли цикл
                 }
                 
                 currentRow = nextPos.row;
                 currentCol = nextPos.col;
-                step++;
+            }
+            
+            // Сбрасываем для движения в обратном направлении
+            currentRow = startRow;
+            currentCol = startCol;
+            
+            // Двигаемся в противоположном направлении (dir + 3) % 6
+            const oppositeDir = (dir + 3) % 6;
+            while (true) {
+                const nextPos = this.getNextHexInDirection(currentRow, currentCol, oppositeDir);
+                if (!nextPos || !this.isValidPosition(nextPos.row, nextPos.col)) break;
+                
+                // Проверяем, не добавили ли мы уже эту клетку
+                const alreadyExists = cells.some(cell => 
+                    cell.row === nextPos.row && cell.col === nextPos.col
+                );
+                
+                if (!alreadyExists) {
+                    cells.push({ row: nextPos.row, col: nextPos.col });
+                } else {
+                    break; // Прерываем если нашли цикл
+                }
+                
+                currentRow = nextPos.row;
+                currentCol = nextPos.col;
             }
         });
         
         return cells;
     }
     
-    getNextHexInDirection(row, col, direction, step) {
+    // ПРАВИЛЬНЫЕ направления для гексагональной сетки (без чередования)
+    getNextHexInDirection(row, col, direction) {
         // ПРАВИЛЬНЫЕ направления для гексагональной сетки с учетом четности столбца
         const directions = [
             // 0: Вертикаль вниз (↓)
             () => ({ row: row + 1, col: col }),
             
-            // 1: Диагональ 1 (↘) - ПРАВИЛЬНО: (5,0)(4,1)(4,2)(3,3)(3,4)(2,5)(2,6)(1,7)
+            // 1: Диагональ 1 (↘)
             () => {
-                // Для диагонали ↘ используем чередование в зависимости от четности столбца
                 if (col % 2 === 0) {
-                    // Четные столбцы: чередование (0,1) и (-1,1)
-                    return step % 2 === 0 
-                        ? { row: row, col: col + 1 } 
-                        : { row: row - 1, col: col + 1 };
-                } else {
-                    // Нечетные столбцы: всегда (0,1)
+                    // Четные столбцы: вправо-вниз
                     return { row: row, col: col + 1 };
+                } else {
+                    // Нечетные столбцы: вправо-вниз
+                    return { row: row + 1, col: col + 1 };
                 }
             },
             
-            // 2: Диагональ 2 (↙) - ПРАВИЛЬНО: (2,0)(2,1)(3,2)(3,3)(4,4)(4,5)(5,6)(5,7)
+            // 2: Диагональ 2 (↙)
             () => {
-                // Для диагонали ↙ используем чередование в зависимости от четности столбца
                 if (col % 2 === 0) {
-                    // Четные столбцы: всегда (0,1)
-                    return { row: row, col: col + 1 };
+                    // Четные столбцы: вправо-вверх
+                    return { row: row - 1, col: col + 1 };
                 } else {
-                    // Нечетные столбцы: чередование (0,1) и (1,1)
-                    return step % 2 === 0 
-                        ? { row: row, col: col + 1 } 
-                        : { row: row + 1, col: col + 1 };
+                    // Нечетные столбцы: вправо
+                    return { row: row, col: col + 1 };
                 }
             },
             
@@ -500,29 +522,23 @@ class HexagonalBattleship {
             
             // 4: Диагональ 1 противоположное (↖)
             () => {
-                // Обратное направление для ↘
                 if (col % 2 === 0) {
-                    // Четные столбцы: чередование (0,-1) и (1,-1)
-                    return step % 2 === 0 
-                        ? { row: row, col: col - 1 } 
-                        : { row: row + 1, col: col - 1 };
+                    // Четные столбцы: влево-вверх
+                    return { row: row - 1, col: col - 1 };
                 } else {
-                    // Нечетные столбцы: всегда (0,-1)
+                    // Нечетные столбцы: влево
                     return { row: row, col: col - 1 };
                 }
             },
             
             // 5: Диагональ 2 противоположное (↗)
             () => {
-                // Обратное направление для ↙
                 if (col % 2 === 0) {
-                    // Четные столбцы: всегда (0,-1)
+                    // Четные столбцы: влево
                     return { row: row, col: col - 1 };
                 } else {
-                    // Нечетные столбцы: чередование (0,-1) и (-1,-1)
-                    return step % 2 === 0 
-                        ? { row: row, col: col - 1 } 
-                        : { row: row - 1, col: col - 1 };
+                    // Нечетные столбцы: влево-вниз
+                    return { row: row + 1, col: col - 1 };
                 }
             }
         ];
@@ -538,14 +554,20 @@ class HexagonalBattleship {
         resultsDiv.innerHTML = '';
         
         const header = document.createElement('div');
-        header.innerHTML = `<strong>Центральная клетка: [${hex.row},${hex.col}]</strong>`;
+        header.innerHTML = `<strong>Центральная клетка: [${hex.row},${hex.col}] (${hex.col % 2 === 0 ? 'четный' : 'нечетный'})</strong>`;
         resultsDiv.appendChild(header);
         
         this.testLines.forEach((line, index) => {
             const lineDiv = document.createElement('div');
             lineDiv.className = `test-line line-${index}`;
             
-            const cellsText = line.cells.map(cell => `[${cell.row},${cell.col}]`).join(' → ');
+            // Сортируем клетки для красивого отображения
+            const sortedCells = [...line.cells].sort((a, b) => {
+                if (a.row !== b.row) return a.row - b.row;
+                return a.col - b.col;
+            });
+            
+            const cellsText = sortedCells.map(cell => `[${cell.row},${cell.col}]`).join(' → ');
             lineDiv.innerHTML = `
                 <strong>${line.name}:</strong><br>
                 Клетки: ${cellsText}<br>
@@ -587,7 +609,7 @@ class HexagonalBattleship {
         this.drawBoards();
     }
     
-    // ПРАВИЛЬНЫЕ НАПРАВЛЕНИЯ ДЛЯ ГЕКСАГОНАЛЬНОЙ СЕТКИ
+    // ПРАВИЛЬНЫЕ направления для размещения кораблей
     getShipPositions(row, col, size, orientation) {
         const positions = [{ row, col }];
         let currentRow = row;
@@ -598,29 +620,21 @@ class HexagonalBattleship {
             // 0: Вертикаль вниз (↓)
             () => ({ dr: 1, dc: 0 }),
             
-            // 1: Диагональ 1 (↘) - ПРАВИЛЬНО: (5,0)(4,1)(4,2)(3,3)(3,4)(2,5)(2,6)(1,7)
-            (step) => {
+            // 1: Диагональ 1 (↘)
+            () => {
                 if (col % 2 === 0) {
-                    // Четные столбцы: чередование (0,1) и (-1,1)
-                    return step % 2 === 0 
-                        ? { dr: 0, dc: 1 } 
-                        : { dr: -1, dc: 1 };
-                } else {
-                    // Нечетные столбцы: всегда (0,1)
                     return { dr: 0, dc: 1 };
+                } else {
+                    return { dr: 1, dc: 1 };
                 }
             },
             
-            // 2: Диагональ 2 (↙) - ПРАВИЛЬНО: (2,0)(2,1)(3,2)(3,3)(4,4)(4,5)(5,6)(5,7)
-            (step) => {
+            // 2: Диагональ 2 (↙)
+            () => {
                 if (col % 2 === 0) {
-                    // Четные столбцы: всегда (0,1)
-                    return { dr: 0, dc: 1 };
+                    return { dr: -1, dc: 1 };
                 } else {
-                    // Нечетные столбцы: чередование (0,1) и (1,1)
-                    return step % 2 === 0 
-                        ? { dr: 0, dc: 1 } 
-                        : { dr: 1, dc: 1 };
+                    return { dr: 0, dc: 1 };
                 }
             },
             
@@ -628,28 +642,20 @@ class HexagonalBattleship {
             () => ({ dr: -1, dc: 0 }),
             
             // 4: Диагональ 1 противоположное (↖)
-            (step) => {
+            () => {
                 if (col % 2 === 0) {
-                    // Четные столбцы: чередование (0,-1) и (1,-1)
-                    return step % 2 === 0 
-                        ? { dr: 0, dc: -1 } 
-                        : { dr: 1, dc: -1 };
+                    return { dr: -1, dc: -1 };
                 } else {
-                    // Нечетные столбцы: всегда (0,-1)
                     return { dr: 0, dc: -1 };
                 }
             },
             
             // 5: Диагональ 2 противоположное (↗)
-            (step) => {
+            () => {
                 if (col % 2 === 0) {
-                    // Четные столбцы: всегда (0,-1)
                     return { dr: 0, dc: -1 };
                 } else {
-                    // Нечетные столбцы: чередование (0,-1) и (-1,-1)
-                    return step % 2 === 0 
-                        ? { dr: 0, dc: -1 } 
-                        : { dr: -1, dc: -1 };
+                    return { dr: 1, dc: -1 };
                 }
             }
         ];
@@ -657,7 +663,7 @@ class HexagonalBattleship {
         const dirFunc = directions[orientation];
         
         for (let i = 1; i < size; i++) {
-            const dir = dirFunc(i - 1);
+            const dir = dirFunc();
             
             currentRow += dir.dr;
             currentCol += dir.dc;
