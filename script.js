@@ -57,10 +57,12 @@ class HexagonalBattleship {
         this.testLines = [];
         
         // Переменные для бота
-        this.botDifficulty = 'normal'; // normal, hard
+        this.botDifficulty = 'normal';
         this.botLastHit = null;
         this.botTargetMode = false;
         this.botPotentialTargets = [];
+        this.botCurrentDirection = null;
+        this.botHitSequence = [];
         
         this.initializeGame();
         this.setupEventListeners();
@@ -109,6 +111,8 @@ class HexagonalBattleship {
         this.botLastHit = null;
         this.botTargetMode = false;
         this.botPotentialTargets = [];
+        this.botCurrentDirection = null;
+        this.botHitSequence = [];
         
         this.updateGamePhase();
         this.updateScores();
@@ -1028,27 +1032,40 @@ class HexagonalBattleship {
         }
     }
     
-    // УЛУЧШЕННЫЙ МЕТОД ХОДА БОТА
+    // УЛУЧШЕННЫЙ МЕТОД ХОДА БОТА С ПРАВИЛЬНОЙ ЛОГИКОЙ
     makeBotMove() {
         if (this.gamePhase !== 'battle' || this.currentPlayer !== 'opponent') return;
         
         let row, col;
         
-        // Умный бот: если есть попадание, ищем в соседних клетках
-        if (this.botLastHit && this.botTargetMode) {
-            const target = this.getNextTarget();
-            if (target) {
-                row = target.row;
-                col = target.col;
+        // Умный бот: если есть попадание, продолжаем в том же направлении
+        if (this.botLastHit && this.botCurrentDirection !== null) {
+            const nextTarget = this.getNextInDirection(this.botLastHit.row, this.botLastHit.col, this.botCurrentDirection);
+            if (nextTarget && !this.isAlreadyShot(nextTarget.row, nextTarget.col, this.opponentShots)) {
+                row = nextTarget.row;
+                col = nextTarget.col;
             } else {
-                // Если целей нет, переходим в случайный режим
-                this.botTargetMode = false;
-                this.botLastHit = null;
-                this.botPotentialTargets = [];
-                return this.makeBotMove(); // Рекурсивно вызываем снова
+                // Если в текущем направлении нельзя стрелять, пробуем противоположное
+                const oppositeDir = (this.botCurrentDirection + 3) % 6;
+                const oppositeTarget = this.getNextInDirection(this.botHitSequence[0].row, this.botHitSequence[0].col, oppositeDir);
+                if (oppositeTarget && !this.isAlreadyShot(oppositeTarget.row, oppositeTarget.col, this.opponentShots)) {
+                    row = oppositeTarget.row;
+                    col = oppositeTarget.col;
+                    this.botCurrentDirection = oppositeDir;
+                } else {
+                    // Если оба направления заблокированы, ищем новое направление
+                    this.findNewDirection();
+                    return this.makeBotMove();
+                }
             }
-        } else {
-            // Случайный выстрел
+        }
+        // Если есть попадание, но нет направления - ищем направление
+        else if (this.botLastHit) {
+            this.findNewDirection();
+            return this.makeBotMove();
+        }
+        // Случайный выстрел
+        else {
             let attempts = 0;
             do {
                 row = Math.floor(Math.random() * this.boardSize);
@@ -1075,28 +1092,32 @@ class HexagonalBattleship {
         }
     }
     
-    // ПОЛУЧЕНИЕ СЛЕДУЮЩЕЙ ЦЕЛИ ДЛЯ БОТА
-    getNextTarget() {
-        if (this.botPotentialTargets.length > 0) {
-            return this.botPotentialTargets.shift();
+    // ПОЛУЧЕНИЕ СЛЕДУЮЩЕЙ КЛЕТКИ В НАПРАВЛЕНИИ
+    getNextInDirection(row, col, direction) {
+        const nextPos = this.getNextHexInDirection(row, col, direction);
+        if (nextPos && this.isValidPosition(nextPos.row, nextPos.col)) {
+            return nextPos;
         }
+        return null;
+    }
+    
+    // ПОИСК НОВОГО НАПРАВЛЕНИЯ ДЛЯ БОТА
+    findNewDirection() {
+        const directions = [0, 1, 2, 3, 4, 5];
+        const shuffledDirs = this.shuffleArray(directions);
         
-        // Генерируем новые цели вокруг последнего попадания
-        const directions = [0, 1, 2, 3, 4, 5]; // Все 6 направлений
-        
-        for (const dir of directions) {
-            const nextPos = this.getNextHexInDirection(this.botLastHit.row, this.botLastHit.col, dir);
-            if (nextPos && 
-                this.isValidPosition(nextPos.row, nextPos.col) && 
-                !this.isAlreadyShot(nextPos.row, nextPos.col, this.opponentShots)) {
-                this.botPotentialTargets.push(nextPos);
+        for (const dir of shuffledDirs) {
+            const target = this.getNextInDirection(this.botLastHit.row, this.botLastHit.col, dir);
+            if (target && !this.isAlreadyShot(target.row, target.col, this.opponentShots)) {
+                this.botCurrentDirection = dir;
+                return;
             }
         }
         
-        // Перемешиваем цели для разнообразия
-        this.botPotentialTargets = this.shuffleArray(this.botPotentialTargets);
-        
-        return this.botPotentialTargets.length > 0 ? this.botPotentialTargets.shift() : null;
+        // Если не нашли подходящее направление, сбрасываем состояние
+        this.botLastHit = null;
+        this.botCurrentDirection = null;
+        this.botHitSequence = [];
     }
     
     // ПЕРЕМЕШИВАНИЕ МАССИВА
@@ -1124,17 +1145,24 @@ class HexagonalBattleship {
                     ship.hits[i] = true;
                     
                     // Обновляем логику бота при попадании
-                    if (!this.botTargetMode) {
-                        this.botTargetMode = true;
-                        this.botLastHit = { row, col };
+                    if (hit) {
+                        if (!this.botLastHit) {
+                            // Первое попадание
+                            this.botLastHit = { row, col };
+                            this.botHitSequence = [{ row, col }];
+                        } else {
+                            // Последующие попадания
+                            this.botLastHit = { row, col };
+                            this.botHitSequence.push({ row, col });
+                        }
                     }
                     
                     if (ship.hits.every(h => h)) {
                         sunkShip = ship;
                         // Если корабль потоплен, сбрасываем режим преследования
-                        this.botTargetMode = false;
                         this.botLastHit = null;
-                        this.botPotentialTargets = [];
+                        this.botCurrentDirection = null;
+                        this.botHitSequence = [];
                     }
                     break;
                 }
@@ -1246,6 +1274,29 @@ class HexagonalBattleship {
         
         document.getElementById('playerMe').classList.toggle('active', this.currentPlayer === 'me');
         document.getElementById('playerOpponent').classList.toggle('active', this.currentPlayer === 'opponent');
+        
+        // Подсветка canvas в зависимости от хода
+        this.highlightCurrentPlayer();
+    }
+    
+    // ПОДСВЕТКА ТЕКУЩЕГО ИГРОКА
+    highlightCurrentPlayer() {
+        const myBoard = document.getElementById('myBoard');
+        const opponentBoard = document.getElementById('opponentBoard');
+        
+        // Сбрасываем подсветку
+        myBoard.style.boxShadow = 'none';
+        opponentBoard.style.boxShadow = 'none';
+        
+        if (this.gamePhase === 'battle') {
+            if (this.currentPlayer === 'me') {
+                // Подсвечиваем поле противника (куда игрок должен стрелять)
+                opponentBoard.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.5)';
+            } else {
+                // Подсвечиваем поле игрока (где бот стреляет)
+                myBoard.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.5)';
+            }
+        }
     }
     
     updateScores() {
@@ -1259,6 +1310,9 @@ class HexagonalBattleship {
     drawBoards() {
         this.drawBoard(this.myCtx, this.myBoardCanvas, this.myBoard, this.myShips, true);
         this.drawBoard(this.opponentCtx, this.opponentBoardCanvas, this.opponentBoard, this.opponentShips, false);
+        
+        // Обновляем подсветку текущего игрока
+        this.highlightCurrentPlayer();
     }
     
     drawBoard(ctx, canvas, board, ships, showShips) {
@@ -1401,7 +1455,8 @@ class HexagonalBattleship {
                 if (showShips) {
                     ctx.fillStyle = '#4CAF50';
                 } else {
-                    ctx.fillStyle = 'rgba(0, 0, 50, 0.7)';
+                    // Скрываем корабли противника
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
                 }
                 break;
             case 'hit':
