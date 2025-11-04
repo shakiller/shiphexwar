@@ -609,70 +609,22 @@ class HexagonalBattleship {
         this.drawBoards();
     }
     
-    // ПРАВИЛЬНЫЕ направления для размещения кораблей
+    // ПРАВИЛЬНЫЕ направления для размещения кораблей (используют ту же логику что и тестовый режим)
     getShipPositions(row, col, size, orientation) {
         const positions = [{ row, col }];
         let currentRow = row;
         let currentCol = col;
         
-        // ПРАВИЛЬНЫЕ направления для гексагональной сетки с учетом четности столбца
-        const directions = [
-            // 0: Вертикаль вниз (↓)
-            () => ({ dr: 1, dc: 0 }),
-            
-            // 1: Диагональ 1 (↘)
-            () => {
-                if (col % 2 === 0) {
-                    return { dr: 0, dc: 1 };
-                } else {
-                    return { dr: 1, dc: 1 };
-                }
-            },
-            
-            // 2: Диагональ 2 (↙)
-            () => {
-                if (col % 2 === 0) {
-                    return { dr: -1, dc: 1 };
-                } else {
-                    return { dr: 0, dc: 1 };
-                }
-            },
-            
-            // 3: Вертикаль вверх (↑)
-            () => ({ dr: -1, dc: 0 }),
-            
-            // 4: Диагональ 1 противоположное (↖)
-            () => {
-                if (col % 2 === 0) {
-                    return { dr: -1, dc: -1 };
-                } else {
-                    return { dr: 0, dc: -1 };
-                }
-            },
-            
-            // 5: Диагональ 2 противоположное (↗)
-            () => {
-                if (col % 2 === 0) {
-                    return { dr: 0, dc: -1 };
-                } else {
-                    return { dr: 1, dc: -1 };
-                }
-            }
-        ];
-        
-        const dirFunc = directions[orientation];
-        
         for (let i = 1; i < size; i++) {
-            const dir = dirFunc();
+            const nextPos = this.getNextHexInDirection(currentRow, currentCol, orientation);
             
-            currentRow += dir.dr;
-            currentCol += dir.dc;
-            
-            if (!this.isValidPosition(currentRow, currentCol)) {
+            if (!nextPos || !this.isValidPosition(nextPos.row, nextPos.col)) {
                 return null;
             }
             
-            positions.push({ row: currentRow, col: currentCol });
+            positions.push({ row: nextPos.row, col: nextPos.col });
+            currentRow = nextPos.row;
+            currentCol = nextPos.col;
         }
         
         return positions;
