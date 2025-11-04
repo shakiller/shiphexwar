@@ -1322,6 +1322,16 @@ class HexagonalBattleship {
         
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         
+        // Создаем множество клеток потопленных кораблей
+        const sunkCells = new Set();
+        ships.forEach(ship => {
+            if (ship.hits.every(h => h)) {
+                ship.positions.forEach(pos => {
+                    sunkCells.add(`${pos.row},${pos.col}`);
+                });
+            }
+        });
+        
         // ОТЛАДКА: информация о размерах
         if (this.showTouchZones) {
             ctx.fillStyle = 'red';
@@ -1340,7 +1350,13 @@ class HexagonalBattleship {
                     (!showShips && this.lastClickedHexOpponentBoard && 
                      this.lastClickedHexOpponentBoard.row === row && this.lastClickedHexOpponentBoard.col === col);
                 
-                this.drawHex(ctx, center.x, center.y, center.hexSize, board[row][col], showShips, row, col, isLastClicked);
+                // Определяем состояние клетки с учетом потопленных кораблей
+                let cellState = board[row][col];
+                if (cellState === 'hit' && sunkCells.has(`${row},${col}`)) {
+                    cellState = 'sunk';
+                }
+                
+                this.drawHex(ctx, center.x, center.y, center.hexSize, cellState, showShips, row, col, isLastClicked);
                 
                 // ОТЛАДКА: центры и зоны клика
                 if (this.showTouchZones) {
@@ -1462,6 +1478,9 @@ class HexagonalBattleship {
             case 'hit':
                 ctx.fillStyle = '#FF5252';
                 break;
+            case 'sunk':
+                ctx.fillStyle = '#8B0000'; // Темно-красный для потопленных кораблей
+                break;
             case 'miss':
                 ctx.fillStyle = '#2196F3';
                 break;
@@ -1490,9 +1509,12 @@ class HexagonalBattleship {
         ctx.textBaseline = 'middle';
         ctx.fillText(`${row},${col}`, x, y);
         
-        if (state === 'hit') {
-            ctx.strokeStyle = '#FFF';
-            ctx.lineWidth = 2;
+        // Рисуем крестик для попаданий и потопленных кораблей
+        if (state === 'hit' || state === 'sunk') {
+            // Для потопленных кораблей используем черный крестик, для обычных попаданий - белый
+            ctx.strokeStyle = state === 'sunk' ? '#000000' : '#FFFFFF';
+            ctx.lineWidth = state === 'sunk' ? 3 : 2; // Более толстый крестик для потопленных кораблей
+            
             ctx.beginPath();
             ctx.moveTo(x - hexSize * 0.3, y - hexSize * 0.3);
             ctx.lineTo(x + hexSize * 0.3, y + hexSize * 0.3);
