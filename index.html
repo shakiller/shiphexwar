@@ -1377,6 +1377,13 @@
                 ctx.lineWidth = isLastClicked ? 3 : 1;
                 ctx.stroke();
                 
+                // Добавляем индексы в каждую клетку
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`${row},${col}`, x, y);
+                
                 if (state === 'hit') {
                     ctx.strokeStyle = '#FFF';
                     ctx.lineWidth = 2;
