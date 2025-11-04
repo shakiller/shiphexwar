@@ -293,6 +293,50 @@ canvas {
     font-family: monospace;
 }
 
+.test-controls {
+    margin: 15px 0;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.test-mode-btn {
+    background: #FF9800 !important;
+    padding: 10px 20px;
+    font-size: 0.9em;
+}
+
+.test-mode-btn:hover {
+    background: #F57C00 !important;
+}
+
+.test-info {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid #FF9800;
+}
+
+.test-results {
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.test-line {
+    margin: 5px 0;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+.line-0 { background: rgba(255, 0, 0, 0.2); border-left: 3px solid #f00; }
+.line-1 { background: rgba(0, 255, 0, 0.2); border-left: 3px solid #0f0; }
+.line-2 { background: rgba(0, 0, 255, 0.2); border-left: 3px solid #00f; }
 /* Медиа-запросы для мобильных устройств */
 @media (max-width: 768px) {
     .game-boards {
