@@ -21,6 +21,9 @@ class HexagonalBattleship {
         // Отображение зон клика
         this.showTouchZones = false;
         
+        // Отображение запрещенных клеток
+        this.showForbiddenCells = false;
+        
         // Настройки игры
         this.boardSize = 8;
         this.ships = [
@@ -63,9 +66,12 @@ class HexagonalBattleship {
         this.botPotentialTargets = [];
         this.botCurrentDirection = null;
         this.botHitSequence = [];
-        this.botForbiddenCells = new Set(); // Клетки вокруг потопленных кораблей
+        this.botForbiddenCells = new Set(); // Клетки вокруг потопленных кораблей (для бота)
         this.botSunkShips = []; // Потопленные корабли
         this.botHuntMode = true; // Режим охоты (поиск новых кораблей)
+        
+        // ЗАПРЕЩЕННЫЕ КЛЕТКИ ДЛЯ ИГРОКА
+        this.playerForbiddenCells = new Set(); // Клетки вокруг потопленных кораблей противника
         
         this.initializeGame();
         this.setupEventListeners();
@@ -119,6 +125,9 @@ class HexagonalBattleship {
         this.botForbiddenCells.clear();
         this.botSunkShips = [];
         this.botHuntMode = true;
+        
+        // Сброс запрещенных клеток игрока
+        this.playerForbiddenCells.clear();
         
         this.updateGamePhase();
         this.updateScores();
@@ -182,6 +191,9 @@ class HexagonalBattleship {
         // Добавляем обработчик для тестового режима
         document.getElementById('toggleTestMode').addEventListener('click', () => this.toggleTestMode());
         
+        // Добавляем обработчик для показа запрещенных клеток
+        document.getElementById('toggleForbiddenCells').addEventListener('click', () => this.toggleForbiddenCells());
+        
         document.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'к' || e.key === 'R' || e.key === 'Й') {
                 this.rotateRight();
@@ -218,6 +230,14 @@ class HexagonalBattleship {
         this.showTouchZones = !this.showTouchZones;
         document.getElementById('toggleTouchZones').textContent = 
             this.showTouchZones ? 'Скрыть зоны клика' : 'Показать зоны клика';
+        this.drawBoards();
+    }
+    
+    // НОВЫЙ МЕТОД ДЛЯ ПЕРЕКЛЮЧЕНИЯ ОТОБРАЖЕНИЯ ЗАПРЕЩЕННЫХ КЛЕТОК
+    toggleForbiddenCells() {
+        this.showForbiddenCells = !this.showForbiddenCells;
+        document.getElementById('toggleForbiddenCells').textContent = 
+            this.showForbiddenCells ? 'Скрыть запрещенные клетки' : 'Показать запрещенные клетки';
         this.drawBoards();
     }
     
@@ -906,7 +926,7 @@ class HexagonalBattleship {
         });
     }
     
-    // ПРОВЕРКА ВОЗМОЖНОСТИ РАЗМЕЩЕНИЯ КОРАБЛЯ ДЛЯ БОТА
+    // ПРОВЕРКА ВОЗМОЖНОСТИ РАЗМЕЩЕНИЯ КОРАБЛЯ ДЛЯ БОта
     canPlaceShipOpponent(positions) {
         // Проверяем что все клетки корабля свободны
         for (const pos of positions) {
@@ -996,6 +1016,8 @@ class HexagonalBattleship {
                     
                     if (ship.hits.every(h => h)) {
                         sunkShip = ship;
+                        // ПОМЕЧАЕМ ЗАПРЕЩЕННЫЕ КЛЕТКИ ДЛЯ ИГРОКА ВОКРУГ ПОТОПЛЕННОГО КОРАБЛЯ
+                        this.markPlayerForbiddenCellsAroundShip(ship);
                     }
                     break;
                 }
@@ -1195,7 +1217,7 @@ class HexagonalBattleship {
         return null;
     }
     
-    // ПОМЕТКА КЛЕТОК ВОКРУГ ПОТОПЛЕННОГО КОРАБЛЯ КАК ЗАПРЕЩЕННЫХ
+    // ПОМЕТКА КЛЕТОК ВОКРУГ ПОТОПЛЕННОГО КОРАБЛЯ КАК ЗАПРЕЩЕННЫХ ДЛЯ БОТА
     markForbiddenCellsAroundShip(ship) {
         // Для каждой клетки корабля добавляем все соседние клетки в запрещенные
         for (const pos of ship.positions) {
@@ -1210,6 +1232,23 @@ class HexagonalBattleship {
         }
         
         console.log(`Бот: помечено ${this.botForbiddenCells.size} запрещенных клеток вокруг потопленного корабля`);
+    }
+    
+    // НОВЫЙ МЕТОД: ПОМЕТКА КЛЕТОК ВОКРУГ ПОТОПЛЕННОГО КОРАБЛЯ ДЛЯ ИГРОКА
+    markPlayerForbiddenCellsAroundShip(ship) {
+        // Для каждой клетки корабля добавляем все соседние клетки в запрещенные
+        for (const pos of ship.positions) {
+            // Добавляем саму клетку корабля (хотя в нее уже стреляли)
+            this.playerForbiddenCells.add(`${pos.row},${pos.col}`);
+            
+            // Добавляем всех соседей
+            const neighbors = this.getNeighborCells(pos.row, pos.col);
+            for (const neighbor of neighbors) {
+                this.playerForbiddenCells.add(`${neighbor.row},${neighbor.col}`);
+            }
+        }
+        
+        console.log(`Игрок: помечено ${this.playerForbiddenCells.size} запрещенных клеток вокруг потопленного корабля`);
     }
     
     // ПЕРЕМЕШИВАНИЕ МАССИВА
@@ -1438,9 +1477,11 @@ class HexagonalBattleship {
             ctx.textAlign = 'left';
             ctx.fillText(`Canvas: ${Math.floor(canvasWidth)}x${Math.floor(canvasHeight)}`, 10, 15);
             
-            // Отображаем количество запрещенных клеток бота (только на поле игрока)
+            // Отображаем количество запрещенных клеток
             if (showShips) {
-                ctx.fillText(`Запрещенных клеток: ${this.botForbiddenCells.size}`, 10, 30);
+                ctx.fillText(`Запрещенных клеток бота: ${this.botForbiddenCells.size}`, 10, 30);
+            } else {
+                ctx.fillText(`Запрещенных клеток игрока: ${this.playerForbiddenCells.size}`, 10, 30);
             }
         }
         
@@ -1460,7 +1501,17 @@ class HexagonalBattleship {
                     cellState = 'sunk';
                 }
                 
-                this.drawHex(ctx, center.x, center.y, center.hexSize, cellState, showShips, row, col, isLastClicked);
+                // ОПРЕДЕЛЯЕМ ЯВЛЯЕТСЯ ЛИ КЛЕТКА ЗАПРЕЩЕННОЙ
+                let isForbidden = false;
+                if (showShips) {
+                    // На поле игрока показываем клетки, запрещенные для бота
+                    isForbidden = this.botForbiddenCells.has(`${row},${col}`);
+                } else {
+                    // На поле противника показываем клетки, запрещенные для игрока
+                    isForbidden = this.playerForbiddenCells.has(`${row},${col}`);
+                }
+                
+                this.drawHex(ctx, center.x, center.y, center.hexSize, cellState, showShips, row, col, isLastClicked, isForbidden);
                 
                 // ОТЛАДКА: центры и зоны клика
                 if (this.showTouchZones) {
@@ -1483,14 +1534,6 @@ class HexagonalBattleship {
                     ctx.textAlign = 'center';
                     ctx.fillText(`${row},${col}`, center.x, center.y - 15);
                 }
-                
-                // Отображаем запрещенные клетки бота (только на поле игрока и в режиме отладки)
-                if (showShips && this.showTouchZones && this.botForbiddenCells.has(`${row},${col}`)) {
-                    ctx.fillStyle = 'rgba(255, 0, 255, 0.3)';
-                    ctx.beginPath();
-                    ctx.arc(center.x, center.y, center.hexSize * 0.4, 0, Math.PI * 2);
-                    ctx.fill();
-                }
             }
         }
         
@@ -1509,7 +1552,7 @@ class HexagonalBattleship {
                 ctx.globalAlpha = 0.6;
                 for (const pos of positions) {
                     const center = this.getHexCenter(pos.row, pos.col, canvas);
-                    this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false);
+                    this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false, false);
                 }
                 ctx.globalAlpha = 1.0;
                 
@@ -1560,7 +1603,8 @@ class HexagonalBattleship {
         });
     }
     
-    drawHex(ctx, x, y, hexSize, state, showShips, row, col, isLastClicked) {
+    // ОБНОВЛЕННЫЙ drawHex С ПОДДЕРЖКОЙ ЗАПРЕЩЕННЫХ КЛЕТОК
+    drawHex(ctx, x, y, hexSize, state, showShips, row, col, isLastClicked, isForbidden) {
         // Рисуем шестиугольник
         ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -1571,6 +1615,12 @@ class HexagonalBattleship {
             else ctx.lineTo(hexX, hexY);
         }
         ctx.closePath();
+        
+        // ЕСЛИ КЛЕТКА ЗАПРЕЩЕННАЯ И РЕЖИМ ПОКАЗА ВКЛЮЧЕН - ОСОБАЯ ЗАЛИВКА
+        if (isForbidden && this.showForbiddenCells) {
+            ctx.fillStyle = 'rgba(128, 0, 128, 0.3)'; // Фиолетовый с прозрачностью
+            ctx.fill();
+        }
         
         // Подсветка последней нажатой ячейки
         if (isLastClicked) {
@@ -1606,7 +1656,8 @@ class HexagonalBattleship {
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
         }
         
-        if (!isLastClicked) {
+        // ЗАЛИВКА ОСНОВНОГО ЦВЕТА ТОЛЬКО ЕСЛИ НЕ ЗАПРЕЩЕННАЯ КЛЕТКА И НЕ ПОСЛЕДНИЙ КЛИК
+        if (!isLastClicked && !(isForbidden && this.showForbiddenCells)) {
             ctx.fill();
         }
         
@@ -1620,6 +1671,25 @@ class HexagonalBattleship {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`${row},${col}`, x, y);
+        
+        // ЕСЛИ КЛЕТКА ЗАПРЕЩЕННАЯ И РЕЖИМ ПОКАЗА ВКЛЮЧЕН - ДОБАВЛЯЕМ СПЕЦИАЛЬНУЮ МАРКИРОВКУ
+        if (isForbidden && this.showForbiddenCells) {
+            ctx.strokeStyle = 'rgba(128, 0, 128, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Добавляем символ "X" для запрещенных клеток
+            ctx.strokeStyle = 'rgba(128, 0, 128, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x - hexSize * 0.4, y - hexSize * 0.4);
+            ctx.lineTo(x + hexSize * 0.4, y + hexSize * 0.4);
+            ctx.moveTo(x + hexSize * 0.4, y - hexSize * 0.4);
+            ctx.lineTo(x - hexSize * 0.4, y + hexSize * 0.4);
+            ctx.stroke();
+        }
         
         // Рисуем крестик для попаданий и потопленных кораблей
         if (state === 'hit' || state === 'sunk') {
@@ -1767,6 +1837,9 @@ class HexagonalBattleship {
                             ship.hits = data.sunkShip.hits;
                         }
                     });
+                    
+                    // ПОМЕЧАЕМ ЗАПРЕЩЕННЫЕ КЛЕТКИ ДЛЯ ИГРОКА
+                    this.markPlayerForbiddenCellsAroundShip(data.sunkShip);
                 }
                 
                 this.drawBoards();
