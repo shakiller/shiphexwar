@@ -56,13 +56,16 @@ class HexagonalBattleship {
         this.testMode = false;
         this.testLines = [];
         
-        // Переменные для бота
-        this.botDifficulty = 'normal';
+        // ПЕРЕМЕННЫЕ ДЛЯ УМНОГО БОТА
+        this.botDifficulty = 'smart';
         this.botLastHit = null;
         this.botTargetMode = false;
         this.botPotentialTargets = [];
         this.botCurrentDirection = null;
         this.botHitSequence = [];
+        this.botForbiddenCells = new Set(); // Клетки вокруг потопленных кораблей
+        this.botSunkShips = []; // Потопленные корабли
+        this.botHuntMode = true; // Режим охоты (поиск новых кораблей)
         
         this.initializeGame();
         this.setupEventListeners();
@@ -107,12 +110,15 @@ class HexagonalBattleship {
         this.lastClickedHexMyBoard = null;
         this.lastClickedHexOpponentBoard = null;
         
-        // Сброс состояния бота
+        // Сброс состояния умного бота
         this.botLastHit = null;
         this.botTargetMode = false;
         this.botPotentialTargets = [];
         this.botCurrentDirection = null;
         this.botHitSequence = [];
+        this.botForbiddenCells.clear();
+        this.botSunkShips = [];
+        this.botHuntMode = true;
         
         this.updateGamePhase();
         this.updateScores();
@@ -1032,64 +1038,152 @@ class HexagonalBattleship {
         }
     }
     
-    // УЛУЧШЕННЫЙ МЕТОД ХОДА БОТА С ПРАВИЛЬНОЙ ЛОГИКОЙ
+    // УМНЫЙ МЕТОД ХОДА БОТА С УЧЕТОМ ПРАВИЛ КАСАНИЯ КОРАБЛЕЙ
     makeBotMove() {
         if (this.gamePhase !== 'battle' || this.currentPlayer !== 'opponent') return;
         
-        let row, col;
+        let target = this.findSmartBotTarget();
         
-        // Умный бот: если есть попадание, продолжаем в том же направлении
+        if (target) {
+            setTimeout(() => {
+                this.receiveBotShot(target.row, target.col);
+            }, 800);
+        }
+    }
+    
+    // УМНЫЙ ПОИСК ЦЕЛИ ДЛЯ БОТА
+    findSmartBotTarget() {
+        // 1. Если есть незавершенная цель, продолжаем ее преследовать
         if (this.botLastHit && this.botCurrentDirection !== null) {
             const nextTarget = this.getNextInDirection(this.botLastHit.row, this.botLastHit.col, this.botCurrentDirection);
-            if (nextTarget && !this.isAlreadyShot(nextTarget.row, nextTarget.col, this.opponentShots)) {
-                row = nextTarget.row;
-                col = nextTarget.col;
+            if (nextTarget && this.isValidBotTarget(nextTarget.row, nextTarget.col)) {
+                return nextTarget;
             } else {
-                // Если в текущем направлении нельзя стрелять, пробуем противоположное
-                const oppositeDir = (this.botCurrentDirection + 3) % 6;
-                const oppositeTarget = this.getNextInDirection(this.botHitSequence[0].row, this.botHitSequence[0].col, oppositeDir);
-                if (oppositeTarget && !this.isAlreadyShot(oppositeTarget.row, oppositeTarget.col, this.opponentShots)) {
-                    row = oppositeTarget.row;
-                    col = oppositeTarget.col;
-                    this.botCurrentDirection = oppositeDir;
+                // Пробуем противоположное направление
+                this.botCurrentDirection = (this.botCurrentDirection + 3) % 6;
+                const oppositeTarget = this.getNextInDirection(this.botHitSequence[0].row, this.botHitSequence[0].col, this.botCurrentDirection);
+                if (oppositeTarget && this.isValidBotTarget(oppositeTarget.row, oppositeTarget.col)) {
+                    return oppositeTarget;
                 } else {
                     // Если оба направления заблокированы, ищем новое направление
-                    this.findNewDirection();
-                    return this.makeBotMove();
+                    this.findNewSmartDirection();
+                    return this.findSmartBotTarget(); // Рекурсивно ищем новую цель
                 }
             }
         }
-        // Если есть попадание, но нет направления - ищем направление
-        else if (this.botLastHit) {
-            this.findNewDirection();
-            return this.makeBotMove();
+        
+        // 2. Если есть попадание, но нет направления, ищем новое направление
+        if (this.botLastHit) {
+            this.findNewSmartDirection();
+            const target = this.findSmartBotTarget();
+            if (target) return target;
         }
-        // Случайный выстрел
-        else {
-            let attempts = 0;
-            do {
-                row = Math.floor(Math.random() * this.boardSize);
-                col = Math.floor(Math.random() * this.boardSize);
-                attempts++;
-            } while (this.isAlreadyShot(row, col, this.opponentShots) && attempts < 100);
-            
-            if (attempts >= 100) {
-                // Если не нашли свободную клетку, ищем любую доступную
-                for (let r = 0; r < this.boardSize; r++) {
-                    for (let c = 0; c < this.boardSize; c++) {
-                        if (!this.isAlreadyShot(r, c, this.opponentShots)) {
-                            row = r;
-                            col = c;
-                            break;
-                        }
+        
+        // 3. Поиск стратегических целей (приоритет непосещенных клеток)
+        const strategicTargets = this.findStrategicTargets();
+        if (strategicTargets.length > 0) {
+            return strategicTargets[Math.floor(Math.random() * strategicTargets.length)];
+        }
+        
+        // 4. Резервный вариант: случайная доступная клетка
+        return this.findRandomAvailableCell();
+    }
+    
+    // ПРОВЕРКА ВАЛИДНОСТИ ЦЕЛИ ДЛЯ БОТА
+    isValidBotTarget(row, col) {
+        // Проверяем, что клетка в пределах доски
+        if (!this.isValidPosition(row, col)) return false;
+        
+        // Проверяем, что в эту клетку еще не стреляли
+        if (this.isAlreadyShot(row, col, this.opponentShots)) return false;
+        
+        // Проверяем, что клетка не запрещена для стрельбы (не рядом с потопленным кораблем)
+        if (this.botForbiddenCells.has(`${row},${col}`)) return false;
+        
+        return true;
+    }
+    
+    // УМНЫЙ ПОИСК НОВОГО НАПРАВЛЕНИЯ
+    findNewSmartDirection() {
+        const directions = this.shuffleArray([0, 1, 2, 3, 4, 5]);
+        
+        for (const dir of directions) {
+            const target = this.getNextInDirection(this.botLastHit.row, this.botLastHit.col, dir);
+            if (target && this.isValidBotTarget(target.row, target.col)) {
+                this.botCurrentDirection = dir;
+                return;
+            }
+        }
+        
+        // Если не нашли подходящее направление, сбрасываем состояние
+        this.botLastHit = null;
+        this.botCurrentDirection = null;
+        this.botHitSequence = [];
+    }
+    
+    // ПОИСК СТРАТЕГИЧЕСКИХ ЦЕЛЕЙ
+    findStrategicTargets() {
+        const strategicTargets = [];
+        
+        // Сначала ищем клетки, которые могут быть частью кораблей
+        for (let row = 0; row < this.boardSize; row++) {
+            for (let col = 0; col < this.boardSize; col++) {
+                if (this.isValidBotTarget(row, col)) {
+                    // Даем приоритет клеткам, у которых есть соседи-попадания
+                    if (this.hasHitNeighbors(row, col)) {
+                        strategicTargets.push({ row, col, priority: 3 });
+                    }
+                    // Средний приоритет - клетки в "перспективных" зонах
+                    else if (this.isInPromisingZone(row, col)) {
+                        strategicTargets.push({ row, col, priority: 2 });
+                    }
+                    // Низкий приоритет - все остальные доступные клетки
+                    else {
+                        strategicTargets.push({ row, col, priority: 1 });
                     }
                 }
             }
         }
         
-        if (row !== undefined && col !== undefined) {
-            this.receiveBotShot(row, col);
+        // Сортируем по приоритету и возвращаем только координаты
+        return strategicTargets
+            .sort((a, b) => b.priority - a.priority)
+            .map(target => ({ row: target.row, col: target.col }));
+    }
+    
+    // ПОИСК СЛУЧАЙНОЙ ДОСТУПНОЙ КЛЕТКИ
+    findRandomAvailableCell() {
+        const availableCells = [];
+        for (let row = 0; row < this.boardSize; row++) {
+            for (let col = 0; col < this.boardSize; col++) {
+                if (this.isValidBotTarget(row, col)) {
+                    availableCells.push({ row, col });
+                }
+            }
         }
+        
+        if (availableCells.length > 0) {
+            return availableCells[Math.floor(Math.random() * availableCells.length)];
+        }
+        
+        return null;
+    }
+    
+    // ПРОВЕРКА ЕСТЬ ЛИ СОСЕДНИЕ КЛЕТКИ С ПОПАДАНИЯМИ
+    hasHitNeighbors(row, col) {
+        const neighbors = this.getNeighborCells(row, col);
+        return neighbors.some(neighbor => 
+            this.myBoard[neighbor.row][neighbor.col] === 'hit'
+        );
+    }
+    
+    // ПРОВЕРКА НАХОДИТСЯ ЛИ КЛЕТКА В ПЕРСПЕКТИВНОЙ ЗОНЕ
+    isInPromisingZone(row, col) {
+        // Перспективные зоны - где еще могут быть корабли
+        // Например, клетки на определенном расстоянии от краев
+        const margin = 2;
+        return row >= margin && row < this.boardSize - margin && 
+               col >= margin && col < this.boardSize - margin;
     }
     
     // ПОЛУЧЕНИЕ СЛЕДУЮЩЕЙ КЛЕТКИ В НАПРАВЛЕНИИ
@@ -1101,23 +1195,21 @@ class HexagonalBattleship {
         return null;
     }
     
-    // ПОИСК НОВОГО НАПРАВЛЕНИЯ ДЛЯ БОТА
-    findNewDirection() {
-        const directions = [0, 1, 2, 3, 4, 5];
-        const shuffledDirs = this.shuffleArray(directions);
-        
-        for (const dir of shuffledDirs) {
-            const target = this.getNextInDirection(this.botLastHit.row, this.botLastHit.col, dir);
-            if (target && !this.isAlreadyShot(target.row, target.col, this.opponentShots)) {
-                this.botCurrentDirection = dir;
-                return;
+    // ПОМЕТКА КЛЕТОК ВОКРУГ ПОТОПЛЕННОГО КОРАБЛЯ КАК ЗАПРЕЩЕННЫХ
+    markForbiddenCellsAroundShip(ship) {
+        // Для каждой клетки корабля добавляем все соседние клетки в запрещенные
+        for (const pos of ship.positions) {
+            // Добавляем саму клетку корабля (хотя в нее уже стреляли)
+            this.botForbiddenCells.add(`${pos.row},${pos.col}`);
+            
+            // Добавляем всех соседей
+            const neighbors = this.getNeighborCells(pos.row, pos.col);
+            for (const neighbor of neighbors) {
+                this.botForbiddenCells.add(`${neighbor.row},${neighbor.col}`);
             }
         }
         
-        // Если не нашли подходящее направление, сбрасываем состояние
-        this.botLastHit = null;
-        this.botCurrentDirection = null;
-        this.botHitSequence = [];
+        console.log(`Бот: помечено ${this.botForbiddenCells.size} запрещенных клеток вокруг потопленного корабля`);
     }
     
     // ПЕРЕМЕШИВАНИЕ МАССИВА
@@ -1130,7 +1222,7 @@ class HexagonalBattleship {
         return newArray;
     }
     
-    // ОБРАБОТКА ВЫСТРЕЛА БОТА
+    // ОБРАБОТКА ВЫСТРЕЛА БОТА С УЧЕТОМ ЗАПРЕЩЕННЫХ КЛЕТОК
     receiveBotShot(row, col) {
         this.opponentShots.push({ row, col });
         
@@ -1150,6 +1242,7 @@ class HexagonalBattleship {
                             // Первое попадание
                             this.botLastHit = { row, col };
                             this.botHitSequence = [{ row, col }];
+                            this.botHuntMode = false; // Переходим в режим преследования
                         } else {
                             // Последующие попадания
                             this.botLastHit = { row, col };
@@ -1157,12 +1250,18 @@ class HexagonalBattleship {
                         }
                     }
                     
+                    // Проверяем, потоплен ли корабль
                     if (ship.hits.every(h => h)) {
                         sunkShip = ship;
-                        // Если корабль потоплен, сбрасываем режим преследования
+                        // Если корабль потоплен, помечаем клетки вокруг как запрещенные
+                        this.markForbiddenCellsAroundShip(ship);
+                        this.botSunkShips.push(ship);
+                        
+                        // Сбрасываем режим преследования
                         this.botLastHit = null;
                         this.botCurrentDirection = null;
                         this.botHitSequence = [];
+                        this.botHuntMode = true; // Возвращаемся в режим охоты
                     }
                     break;
                 }
@@ -1182,11 +1281,11 @@ class HexagonalBattleship {
             return;
         }
         
-        // Если бот попал, он ходит снова
-        if (hit) {
+        // Если бот попал и корабль не потоплен, он ходит снова
+        if (hit && !sunkShip) {
             setTimeout(() => this.makeBotMove(), 800);
         } else {
-            // Если промах, ход переходит игроку
+            // Если промах или корабль потоплен, ход переходит игроку
             this.currentPlayer = 'me';
             this.updateGamePhase();
         }
@@ -1338,6 +1437,11 @@ class HexagonalBattleship {
             ctx.font = '12px Arial';
             ctx.textAlign = 'left';
             ctx.fillText(`Canvas: ${Math.floor(canvasWidth)}x${Math.floor(canvasHeight)}`, 10, 15);
+            
+            // Отображаем количество запрещенных клеток бота (только на поле игрока)
+            if (showShips) {
+                ctx.fillText(`Запрещенных клеток: ${this.botForbiddenCells.size}`, 10, 30);
+            }
         }
         
         // Рисуем все гексы используя ОДИН метод вычисления координат
@@ -1379,6 +1483,14 @@ class HexagonalBattleship {
                     ctx.textAlign = 'center';
                     ctx.fillText(`${row},${col}`, center.x, center.y - 15);
                 }
+                
+                // Отображаем запрещенные клетки бота (только на поле игрока и в режиме отладки)
+                if (showShips && this.showTouchZones && this.botForbiddenCells.has(`${row},${col}`)) {
+                    ctx.fillStyle = 'rgba(255, 0, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.arc(center.x, center.y, center.hexSize * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
         
@@ -1406,7 +1518,7 @@ class HexagonalBattleship {
                     ctx.fillStyle = valid ? 'lime' : 'red';
                     ctx.font = '12px Arial';
                     ctx.textAlign = 'left';
-                    ctx.fillText(`Корабль: ${positions.length} из ${this.selectedShip.size} клеток`, 10, 30);
+                    ctx.fillText(`Корабль: ${positions.length} из ${this.selectedShip.size} клеток`, 10, 45);
                 }
             }
         }
