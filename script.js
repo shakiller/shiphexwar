@@ -1556,18 +1556,22 @@ class HexagonalBattleship {
     highlightCurrentPlayer() {
         const myBoard = document.getElementById('myBoard');
         const opponentBoard = document.getElementById('opponentBoard');
+
+        if (!myBoard || !opponentBoard) {
+            return;
+        }
         
         // Сбрасываем подсветку
-        myBoard.style.boxShadow = 'none';
-        opponentBoard.style.boxShadow = 'none';
+        myBoard.classList.remove('board-highlight-target', 'board-highlight-danger');
+        opponentBoard.classList.remove('board-highlight-target', 'board-highlight-danger');
         
         if (this.gamePhase === 'battle') {
             if (this.currentPlayer === 'me') {
                 // Подсвечиваем поле противника (куда игрок должен стрелять)
-                opponentBoard.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.5)';
+                opponentBoard.classList.add('board-highlight-target');
             } else {
-                // Подсвечиваем поле игрока (где бот стреляет)
-                myBoard.style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.5)';
+                // Подсвечиваем поле игрока (где противник стреляет)
+                myBoard.classList.add('board-highlight-danger');
             }
         }
     }
