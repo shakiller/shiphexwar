@@ -5,9 +5,14 @@ class HexagonalBattleship {
         this.myCtx = this.myBoardCanvas.getContext('2d');
         this.opponentCtx = this.opponentBoardCanvas.getContext('2d');
         
-        // Устанавливаем внутренние размеры canvas равными CSS размерам
-        this.setCanvasSize(this.myBoardCanvas, 500, 500);
-        this.setCanvasSize(this.opponentBoardCanvas, 500, 500);
+        this.handleResize = this.handleResize.bind(this);
+        this.updateCanvasSizes();
+        window.addEventListener('resize', this.handleResize);
+        if (window.ResizeObserver) {
+            this.canvasResizeObserver = new ResizeObserver(this.handleResize);
+            this.canvasResizeObserver.observe(this.myBoardCanvas.parentElement);
+            this.canvasResizeObserver.observe(this.opponentBoardCanvas.parentElement);
+        }
         
         // Переменные для отслеживания мыши
         this.currentMouseX = 0;
@@ -82,12 +87,36 @@ class HexagonalBattleship {
     // Устанавливаем размеры canvas с учетом devicePixelRatio
     setCanvasSize(canvas, width, height) {
         const dpr = window.devicePixelRatio || 1;
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
-        canvas.width = width * dpr;
-        canvas.height = height * dpr;
+        const targetWidth = Math.max(1, Math.round(width));
+        const targetHeight = Math.max(1, Math.round(height));
+        canvas.style.width = targetWidth + 'px';
+        canvas.style.height = targetHeight + 'px';
+        canvas.width = targetWidth * dpr;
+        canvas.height = targetHeight * dpr;
         const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.scale(dpr, dpr);
+    }
+
+    updateCanvasSizes() {
+        this.resizeCanvasToParent(this.myBoardCanvas);
+        this.resizeCanvasToParent(this.opponentBoardCanvas);
+    }
+
+    resizeCanvasToParent(canvas) {
+        const parent = canvas.parentElement;
+        if (!parent) {
+            return;
+        }
+        const rect = parent.getBoundingClientRect();
+        const width = rect.width || canvas.clientWidth || 1;
+        const height = rect.height || width;
+        this.setCanvasSize(canvas, width, height);
+    }
+
+    handleResize() {
+        this.updateCanvasSizes();
+        this.drawBoards();
     }
     
     // Преобразуем координаты мыши в координаты canvas
