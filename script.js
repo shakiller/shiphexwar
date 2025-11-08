@@ -122,6 +122,22 @@ class HexagonalBattleship {
         this.drawBoards();
     }
 
+    getMyRole() {
+        return this.isHost ? 'host' : 'client';
+    }
+
+    getOpponentRole() {
+        return this.isHost ? 'client' : 'host';
+    }
+
+    mapRoleToPerspective(role) {
+        return role === this.getMyRole() ? 'me' : 'opponent';
+    }
+
+    getActivePlayerRole() {
+        return this.currentPlayer === 'me' ? this.getMyRole() : this.getOpponentRole();
+    }
+
     updateSyncControls({ visible = false, enabled = false } = {}) {
         const controls = document.getElementById('syncControls');
         const button = document.getElementById('syncButton');
@@ -168,7 +184,7 @@ class HexagonalBattleship {
             type: 'game_state',
             ships: this.myShips,
             gamePhase: this.gamePhase,
-            currentPlayer: this.currentPlayer,
+            activeRole: this.getActivePlayerRole(),
             timestamp: Date.now(),
             reason
         };
@@ -1097,8 +1113,8 @@ class HexagonalBattleship {
         return this.myShips.length === totalShips;
     }
     
-    startBattle() {
-        if (!this.allShipsPlaced()) return;
+    startBattle({ fromNetwork = false, activeRole = null } = {}) {
+        if (!fromNetwork && !this.allShipsPlaced()) return;
         
         // В локальном режиме автоматически размещаем корабли бота
         if (!this.isOnline) {
@@ -1106,13 +1122,21 @@ class HexagonalBattleship {
         }
         
         this.gamePhase = 'battle';
-        this.currentPlayer = 'me';
+        
+        if (this.isOnline) {
+            const roleToPlay = activeRole || (this.isHost ? 'host' : 'client');
+            this.currentPlayer = this.mapRoleToPerspective(roleToPlay);
+        } else {
+            this.currentPlayer = 'me';
+        }
+        
         this.updateGamePhase();
         this.drawBoards();
         
-        if (this.isOnline) {
+        if (this.isOnline && !fromNetwork) {
             this.sendData({
-                type: 'start_battle'
+                type: 'start_battle',
+                activeRole: this.getActivePlayerRole()
             });
         }
     }
@@ -1155,26 +1179,21 @@ class HexagonalBattleship {
             return;
         }
         
-        // В локальном режиме передаем ход боту если промах
-        if (!this.isOnline && !hit) {
+        if (this.isOnline) {
+            this.currentPlayer = 'opponent';
+            this.updateGamePhase();
+            this.sendData({
+                type: 'shot',
+                row,
+                col,
+                hit,
+                sunkShip,
+                nextRole: this.getActivePlayerRole()
+            });
+        } else {
             this.currentPlayer = 'opponent';
             this.updateGamePhase();
             setTimeout(() => this.makeBotMove(), 800);
-        }
-        
-        if (this.isOnline) {
-            this.sendData({
-                type: 'shot',
-                row: row,
-                col: col,
-                hit: hit,
-                sunkShip: sunkShip
-            });
-            
-            if (!hit) {
-                this.currentPlayer = 'opponent';
-                this.updateGamePhase();
-            }
         }
     }
     
@@ -1438,18 +1457,12 @@ class HexagonalBattleship {
             return;
         }
         
-        // Если бот попал и корабль не потоплен, он ходит снова
-        if (hit && !sunkShip) {
-            setTimeout(() => this.makeBotMove(), 800);
-        } else {
-            // Если промах или корабль потоплен, ход переходит игроку
-            this.currentPlayer = 'me';
-            this.updateGamePhase();
-        }
+        this.currentPlayer = 'me';
+        this.updateGamePhase();
     }
     
     // СТАРЫЙ МЕТОД ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
-    receiveShot(row, col) {
+    receiveShot(row, col, nextRole = null) {
         if (this.isOnline) {
             // Онлайн-логика
             this.opponentShots.push({ row, col });
@@ -1486,19 +1499,19 @@ class HexagonalBattleship {
             }
             
             if (this.isOnline) {
+                const nextRoleToSend = this.getMyRole();
                 this.sendData({
                     type: 'shot_result',
-                    row: row,
-                    col: col,
-                    hit: hit,
-                    sunkShip: sunkShip
+                    row,
+                    col,
+                    hit,
+                    sunkShip,
+                    nextRole: nextRoleToSend
                 });
-                
-                if (!hit) {
-                    this.currentPlayer = 'me';
-                    this.updateGamePhase();
-                }
             }
+
+            this.currentPlayer = nextRole ? this.mapRoleToPerspective(nextRole) : 'me';
+            this.updateGamePhase();
         }
     }
     
@@ -1521,7 +1534,11 @@ class HexagonalBattleship {
                 phaseElement.textContent = 'Фаза расстановки кораблей';
                 break;
             case 'battle':
-                phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Бота'}`;
+                if (this.isOnline) {
+                    phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Противника'}`;
+                } else {
+                    phaseElement.textContent = `Фаза боя - Ход: ${this.currentPlayer === 'me' ? 'Ваш' : 'Бота'}`;
+                }
                 break;
             case 'gameover':
                 phaseElement.textContent = 'Игра завершена';
@@ -1954,6 +1971,9 @@ class HexagonalBattleship {
                     this.gamePhase = data.gamePhase;
                     this.updateGamePhase();
                 }
+                if (data.activeRole) {
+                    this.currentPlayer = this.mapRoleToPerspective(data.activeRole);
+                }
                 this.updateSyncControls({ visible: true, enabled: true });
                 this.drawBoards();
                 this.updateScores();
@@ -1968,11 +1988,15 @@ class HexagonalBattleship {
                 break;
                 
             case 'start_battle':
-                this.startBattle();
+                this.startBattle({ fromNetwork: true, activeRole: data.activeRole });
                 break;
                 
             case 'shot':
-                this.receiveShot(data.row, data.col);
+                if (data.nextRole) {
+                    this.currentPlayer = this.mapRoleToPerspective(data.nextRole);
+                    this.updateGamePhase();
+                }
+                this.receiveShot(data.row, data.col, data.nextRole);
                 break;
                 
             case 'shot_result':
@@ -1993,10 +2017,12 @@ class HexagonalBattleship {
                 this.drawBoards();
                 this.updateScores();
                 
-                if (!data.hit) {
+                if (data.nextRole) {
+                    this.currentPlayer = this.mapRoleToPerspective(data.nextRole);
+                } else if (!data.hit) {
                     this.currentPlayer = 'me';
-                    this.updateGamePhase();
                 }
+                this.updateGamePhase();
                 break;
                 
             case 'request_state':
