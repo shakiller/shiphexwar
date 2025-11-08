@@ -27,6 +27,10 @@
                 </div>
                 <div id="connectionStatus"></div>
                 <div id="roomInfo"></div>
+                <div class="sync-controls" id="syncControls">
+                    <button id="syncButton" class="control-btn" disabled>🔄 Синхронизировать</button>
+                    <div id="syncStatus" class="sync-status"></div>
+                </div>
             </div>
             <div class="game-phase" id="gamePhase">Фаза расстановки кораблей</div>
             
@@ -37,22 +41,28 @@
                 <button id="toggleTouchZones" class="touch-zones-toggle">Показать зоны клика</button>
             </div>
 
+            
+            <div class="players">
+                <div class="player me" id="playerMe">
+                    Ваш </br>флот
+                    <div class="score" id="scoreMe">
+                        <span class="score-number">0</span>
+                        <span class="score-label">кораблей</span>
+                    </div>
+                </div>
+                <div class="player opponent" id="playerOpponent">
+                    Флот </br>противника
+                    <div class="score" id="scoreOpponent">
+                        <span class="score-number">0</span>
+                        <span class="score-label">кораблей</span>
+                    </div>
+                </div>
+            </div>
             <div class="rotation-controls">
                 <button class="rotation-btn" id="rotateLeft">↶ Повернуть влево</button>
                 <div class="rotation-info" id="rotationInfo">Направление: ↘</div>
                 <button class="rotation-btn" id="rotateRight">Повернуть вправо ↷</button>
             </div>
-            <div class="players">
-                <div class="player me" id="playerMe">
-                    Ваш </br>флот
-                    <div class="score" id="scoreMe">0 кораблей</div>
-                </div>
-                <div class="player opponent" id="playerOpponent">
-                    Флот </br>противника
-                    <div class="score" id="scoreOpponent">0 кораблей</div>
-                </div>
-            </div>
-            
             
             
             <div class="direction-hint">

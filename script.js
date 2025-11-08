@@ -13,6 +13,9 @@ class HexagonalBattleship {
             this.canvasResizeObserver.observe(this.myBoardCanvas.parentElement);
             this.canvasResizeObserver.observe(this.opponentBoardCanvas.parentElement);
         }
+        this.syncStatusTimeout = null;
+        this.updateSyncControls({ visible: false, enabled: false });
+        this.updateSyncStatus();
         
         // Переменные для отслеживания мыши
         this.currentMouseX = 0;
@@ -118,6 +121,92 @@ class HexagonalBattleship {
         this.updateCanvasSizes();
         this.drawBoards();
     }
+
+    updateSyncControls({ visible = false, enabled = false } = {}) {
+        const controls = document.getElementById('syncControls');
+        const button = document.getElementById('syncButton');
+        if (!controls || !button) {
+            return;
+        }
+        controls.style.display = visible ? 'block' : 'none';
+        button.disabled = !enabled;
+        button.classList.toggle('disabled', !enabled);
+    }
+
+    updateSyncStatus(message = '', type = 'info', options = {}) {
+        const statusElement = document.getElementById('syncStatus');
+        if (!statusElement) {
+            return;
+        }
+
+        const { autoHide = true, duration = 4000 } = options;
+
+        if (this.syncStatusTimeout) {
+            clearTimeout(this.syncStatusTimeout);
+            this.syncStatusTimeout = null;
+        }
+
+        statusElement.classList.remove('success', 'error', 'info');
+
+        if (!message) {
+            statusElement.style.display = 'none';
+            statusElement.textContent = '';
+            return;
+        }
+
+        statusElement.textContent = message;
+        statusElement.style.display = 'block';
+        statusElement.classList.add(type || 'info');
+
+        if (autoHide) {
+            this.syncStatusTimeout = setTimeout(() => this.updateSyncStatus(), duration);
+        }
+    }
+
+    buildGameStatePayload(reason = 'sync') {
+        return {
+            type: 'game_state',
+            ships: this.myShips,
+            gamePhase: this.gamePhase,
+            currentPlayer: this.currentPlayer,
+            timestamp: Date.now(),
+            reason
+        };
+    }
+
+    syncOnlineState() {
+        if (!this.isOnline) {
+            this.updateSyncStatus('Синхронизация доступна только в онлайн режиме.', 'error', { autoHide: false });
+            return;
+        }
+
+        if (!this.connection || !this.connection.open) {
+            this.updateSyncStatus('Нет активного соединения для синхронизации.', 'error', { autoHide: false });
+            this.updateSyncControls({ visible: true, enabled: false });
+            return;
+        }
+
+        const sentState = this.sendData(this.buildGameStatePayload('sync_push'));
+        const sentRequest = this.sendData({ type: 'request_state', reason: 'sync_request', timestamp: Date.now() });
+
+        if (sentState && sentRequest) {
+            this.updateSyncStatus('Запрос синхронизации отправлен.', 'info');
+        }
+    }
+
+    notifyReadyState() {
+        if (!this.isOnline || !this.connection || !this.connection.open) {
+            return;
+        }
+
+        if (!this.allShipsPlaced()) {
+            return;
+        }
+
+        if (this.sendData({ type: 'ready', ships: this.myShips, timestamp: Date.now() })) {
+            this.updateSyncStatus('Отправлена ваша расстановка кораблей.', 'info');
+        }
+    }
     
     // Преобразуем координаты мыши в координаты canvas
     getMousePos(canvas, evt) {
@@ -222,6 +311,11 @@ class HexagonalBattleship {
         
         // Добавляем обработчик для показа запрещенных клеток
         document.getElementById('toggleForbiddenCells').addEventListener('click', () => this.toggleForbiddenCells());
+
+        const syncButton = document.getElementById('syncButton');
+        if (syncButton) {
+            syncButton.addEventListener('click', () => this.syncOnlineState());
+        }
         
         document.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'к' || e.key === 'R' || e.key === 'Й') {
@@ -230,10 +324,6 @@ class HexagonalBattleship {
             if (e.key === 'q' || e.key === 'й' || e.key === 'Q' || e.key === 'Й') {
                 this.rotateLeft();
             }
-        });
-
-        window.addEventListener('resize', () => {
-            this.drawBoards();
         });
     }
     
@@ -325,6 +415,17 @@ class HexagonalBattleship {
         
         document.getElementById('modeLocal').classList.toggle('active', mode === 'local');
         document.getElementById('modeOnline').classList.toggle('active', mode === 'online');
+
+        if (mode === 'online') {
+            const connectionOpen = this.connection && this.connection.open;
+            this.updateSyncControls({ visible: true, enabled: connectionOpen });
+            if (!connectionOpen) {
+                this.updateSyncStatus('Подключитесь или создайте комнату, чтобы синхронизироваться.', 'info');
+            }
+        } else {
+            this.updateSyncControls({ visible: false, enabled: false });
+            this.updateSyncStatus();
+        }
         
         if (mode === 'local') {
             this.leaveOnlineGame();
@@ -452,13 +553,7 @@ class HexagonalBattleship {
                     
                     if (this.allShipsPlaced()) {
                         document.getElementById('startGame').style.display = 'block';
-                        
-                        if (this.isOnline && this.isHost) {
-                            this.sendData({
-                                type: 'ready',
-                                ships: this.myShips
-                            });
-                        }
+                        this.notifyReadyState();
                     }
                 } else {
                     debugInfo.innerHTML += '<br><span style="color:red">Нельзя разместить здесь!</span>';
@@ -889,13 +984,7 @@ class HexagonalBattleship {
         
         if (this.allShipsPlaced()) {
             document.getElementById('startGame').style.display = 'block';
-            
-            if (this.isOnline && this.isHost) {
-                this.sendData({
-                    type: 'ready',
-                    ships: this.myShips
-                });
-            }
+            this.notifyReadyState();
         } else {
             console.warn("Не все корабли удалось разместить автоматически");
         }
@@ -1470,8 +1559,15 @@ class HexagonalBattleship {
         const myAliveShips = this.myShips.filter(ship => !ship.hits.every(h => h)).length;
         const opponentAliveShips = this.opponentShips.filter(ship => !ship.hits.every(h => h)).length;
         
-        document.getElementById('scoreMe').textContent = `${myAliveShips} кораблей`;
-        document.getElementById('scoreOpponent').textContent = `${opponentAliveShips} кораблей`;
+        this.setScore(document.getElementById('scoreMe'), myAliveShips);
+        this.setScore(document.getElementById('scoreOpponent'), opponentAliveShips);
+    }
+
+    setScore(element, value) {
+        if (!element) {
+            return;
+        }
+        element.innerHTML = `<span class="score-number">${value}</span><span class="score-label">кораблей</span>`;
     }
     
     drawBoards() {
@@ -1806,8 +1902,10 @@ class HexagonalBattleship {
     setupConnection() {
         this.connection.on('open', () => {
             this.updateConnectionStatus('Подключено!', 'success');
+            this.updateSyncControls({ visible: true, enabled: true });
+            this.updateSyncStatus('Соединение установлено. Можно синхронизировать.', 'success');
             if (!this.isHost) {
-                this.sendData({ type: 'request_state' });
+                this.sendData({ type: 'request_state', reason: 'initial_sync', timestamp: Date.now() });
             }
         });
         
@@ -1817,12 +1915,16 @@ class HexagonalBattleship {
         
         this.connection.on('close', () => {
             this.updateConnectionStatus('Соединение разорвано', 'error');
-            this.leaveOnlineGame();
+            this.updateSyncControls({ visible: true, enabled: false });
+            this.updateSyncStatus('Соединение разорвано.', 'error', { autoHide: false });
+            this.leaveOnlineGame({ preserveStatus: true });
         });
         
         this.connection.on('error', (err) => {
             console.error('Connection error:', err);
             this.updateConnectionStatus('Ошибка соединения', 'error');
+            this.updateSyncControls({ visible: true, enabled: false });
+            this.updateSyncStatus('Ошибка соединения. Попробуйте переподключиться.', 'error', { autoHide: false });
         });
     }
     
@@ -1831,21 +1933,38 @@ class HexagonalBattleship {
         
         switch (data.type) {
             case 'ready':
+                this.opponentShips = Array.isArray(data.ships) ? data.ships : [];
+                this.drawBoards();
+                this.updateScores();
+                this.updateSyncControls({ visible: true, enabled: true });
+
                 if (this.isHost) {
-                    this.opponentShips = data.ships;
-                    this.sendData({
-                        type: 'game_state',
-                        ships: this.myShips,
-                        gamePhase: this.gamePhase
-                    });
+                    this.updateSyncStatus('Противник готов. Отправляем свои данные.', 'success');
+                    this.sendData(this.buildGameStatePayload('ready_ack'));
+                } else {
+                    this.updateSyncStatus('Противник подтвердил готовность.', 'success');
                 }
                 break;
                 
             case 'game_state':
-                this.opponentShips = data.ships;
-                this.gamePhase = data.gamePhase;
-                this.updateGamePhase();
+                if (Array.isArray(data.ships)) {
+                    this.opponentShips = data.ships;
+                }
+                if (data.gamePhase) {
+                    this.gamePhase = data.gamePhase;
+                    this.updateGamePhase();
+                }
+                this.updateSyncControls({ visible: true, enabled: true });
                 this.drawBoards();
+                this.updateScores();
+
+                if (data.reason === 'sync_response' || data.reason === 'sync_push') {
+                    this.updateSyncStatus('Синхронизация завершена.', 'success');
+                } else if (data.reason === 'ready_ack') {
+                    this.updateSyncStatus('Противник получил вашу расстановку.', 'success');
+                } else {
+                    this.updateSyncStatus('Данные противника обновлены.', 'info');
+                }
                 break;
                 
             case 'start_battle':
@@ -1881,13 +2000,8 @@ class HexagonalBattleship {
                 break;
                 
             case 'request_state':
-                if (this.isHost) {
-                    this.sendData({
-                        type: 'game_state',
-                        ships: this.myShips,
-                        gamePhase: this.gamePhase
-                    });
-                }
+                this.updateSyncStatus('Получен запрос синхронизации. Отправляем актуальные данные...', 'info');
+                this.sendData(this.buildGameStatePayload('sync_response'));
                 break;
         }
     }
@@ -1913,7 +2027,7 @@ class HexagonalBattleship {
                                    type === 'error' ? '#f8d7da' : '#d1ecf1';
     }
     
-    leaveOnlineGame() {
+    leaveOnlineGame({ preserveStatus = false } = {}) {
         if (this.connection) {
             this.connection.close();
         }
@@ -1921,6 +2035,14 @@ class HexagonalBattleship {
             this.peer.destroy();
         }
         this.isOnline = false;
+        if (preserveStatus) {
+            this.updateSyncControls({ visible: true, enabled: false });
+        } else {
+            this.updateSyncControls({ visible: false, enabled: false });
+        }
+        if (!preserveStatus) {
+            this.updateSyncStatus();
+        }
         this.initializeGame();
     }
 }
