@@ -14,6 +14,10 @@ class HexagonalBattleship {
             this.canvasResizeObserver.observe(this.opponentBoardCanvas.parentElement);
         }
         this.syncStatusTimeout = null;
+        this.MIN_BOARD_ZOOM = 0.4;
+        this.MAX_BOARD_ZOOM = 1;
+        this.ZOOM_STEP = 0.1;
+        this.boardZoom = 1;
         this.updateSyncControls({ visible: false, enabled: false });
         this.updateSyncStatus();
         
@@ -85,6 +89,8 @@ class HexagonalBattleship {
         this.setupEventListeners();
         this.createShipPalette();
         this.drawBoards();
+        this.updateZoomDisplay();
+        this.updateZoomControls();
     }
     
     // Устанавливаем размеры canvas с учетом devicePixelRatio
@@ -177,6 +183,55 @@ class HexagonalBattleship {
         if (autoHide) {
             this.syncStatusTimeout = setTimeout(() => this.updateSyncStatus(), duration);
         }
+    }
+
+    updateZoomDisplay() {
+        const display = document.getElementById('zoomDisplay');
+        if (!display) {
+            return;
+        }
+        const percent = Math.round((this.boardZoom || 1) * 100);
+        display.textContent = `${percent}%`;
+    }
+
+    updateZoomControls() {
+        const zoomInButton = document.getElementById('zoomIn');
+        const zoomOutButton = document.getElementById('zoomOut');
+        const zoomResetButton = document.getElementById('zoomReset');
+
+        if (!zoomInButton || !zoomOutButton) {
+            return;
+        }
+
+        const zoom = this.boardZoom || 1;
+        zoomInButton.disabled = zoom >= this.MAX_BOARD_ZOOM - 1e-3;
+        zoomOutButton.disabled = zoom <= this.MIN_BOARD_ZOOM + 1e-3;
+
+        if (zoomResetButton) {
+            zoomResetButton.disabled = Math.abs(zoom - 1) < 1e-3;
+        }
+    }
+
+    setBoardZoom(value) {
+        const clamped = Math.min(this.MAX_BOARD_ZOOM, Math.max(this.MIN_BOARD_ZOOM, value));
+        if (Math.abs(clamped - this.boardZoom) < 1e-3) {
+            this.boardZoom = clamped;
+            this.updateZoomDisplay();
+            this.updateZoomControls();
+            return;
+        }
+        this.boardZoom = clamped;
+        this.updateZoomDisplay();
+        this.updateZoomControls();
+        this.drawBoards();
+    }
+
+    adjustBoardZoom(delta) {
+        this.setBoardZoom((this.boardZoom || 1) + delta);
+    }
+
+    resetBoardZoom() {
+        this.setBoardZoom(1);
     }
 
     buildGameStatePayload(reason = 'sync') {
@@ -327,6 +382,20 @@ class HexagonalBattleship {
         
         // Добавляем обработчик для показа запрещенных клеток
         document.getElementById('toggleForbiddenCells').addEventListener('click', () => this.toggleForbiddenCells());
+
+        const zoomInButton = document.getElementById('zoomIn');
+        const zoomOutButton = document.getElementById('zoomOut');
+        const zoomResetButton = document.getElementById('zoomReset');
+
+        if (zoomInButton) {
+            zoomInButton.addEventListener('click', () => this.adjustBoardZoom(this.ZOOM_STEP));
+        }
+        if (zoomOutButton) {
+            zoomOutButton.addEventListener('click', () => this.adjustBoardZoom(-this.ZOOM_STEP));
+        }
+        if (zoomResetButton) {
+            zoomResetButton.addEventListener('click', () => this.resetBoardZoom());
+        }
 
         const syncButton = document.getElementById('syncButton');
         if (syncButton) {
@@ -499,7 +568,9 @@ class HexagonalBattleship {
 
         const widthLimitedHexSize = canvasWidth / widthDenominator;
         const heightLimitedHexSize = canvasHeight / heightDenominator;
-        const hexSize = Math.max(8, Math.min(widthLimitedHexSize, heightLimitedHexSize));
+        const baseHexSize = Math.max(6, Math.min(widthLimitedHexSize, heightLimitedHexSize));
+        const zoom = Math.min(this.MAX_BOARD_ZOOM, Math.max(this.MIN_BOARD_ZOOM, this.boardZoom || 1));
+        const hexSize = Math.max(6, baseHexSize * zoom);
 
         const hexWidth = hexSize * 2;
         const hexHeight = hexSize * Math.sqrt(3);
