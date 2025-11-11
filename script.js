@@ -479,20 +479,9 @@ class HexagonalBattleship {
     }
     
     // ОБЩИЙ МЕТОД ДЛЯ ВЫЧИСЛЕНИЯ КООРДИНАТ ГЕКСА
-    getHexCenter(row, col, canvas) {
-        const hexSize = 30; // Фиксированный размер для простоты
-        const hexHeight = hexSize * Math.sqrt(3);
-        const hexWidth = hexSize * 2;
-        
-        // Получаем реальные размеры canvas (уже с учетом DPR)
-        const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
-        const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
-        
-        const totalWidth = this.boardSize * hexWidth * 0.75 - hexWidth * 0.25;
-        const totalHeight = this.boardSize * hexHeight + hexHeight * 0.5;
-        
-        const offsetX = (canvasWidth - totalWidth) / 2;
-        const offsetY = (canvasHeight - totalHeight) / 2;
+    getHexCenter(row, col, canvas, metrics = null) {
+        const data = metrics || this.getHexMetrics(canvas);
+        const { hexSize, hexWidth, hexHeight, offsetX, offsetY } = data;
         
         const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
         const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
@@ -500,12 +489,37 @@ class HexagonalBattleship {
         return { x, y, hexSize };
     }
 
+    getHexMetrics(canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const canvasWidth = canvas.width / dpr;
+        const canvasHeight = canvas.height / dpr;
+
+        const widthDenominator = 2 * (this.boardSize * 0.75 - 0.25);
+        const heightDenominator = (this.boardSize + 0.5) * Math.sqrt(3);
+
+        const widthLimitedHexSize = canvasWidth / widthDenominator;
+        const heightLimitedHexSize = canvasHeight / heightDenominator;
+        const hexSize = Math.max(8, Math.min(widthLimitedHexSize, heightLimitedHexSize));
+
+        const hexWidth = hexSize * 2;
+        const hexHeight = hexSize * Math.sqrt(3);
+
+        const totalWidth = hexWidth * (this.boardSize * 0.75 - 0.25);
+        const totalHeight = hexHeight * (this.boardSize + 0.5);
+
+        const offsetX = (canvasWidth - totalWidth) / 2;
+        const offsetY = (canvasHeight - totalHeight) / 2;
+
+        return { hexSize, hexWidth, hexHeight, offsetX, offsetY, canvasWidth, canvasHeight };
+    }
+
     // УПРОЩЕННЫЙ МЕТОД ОПРЕДЕЛЕНИЯ ЯЧЕЙКИ
     getHexAtPosition(x, y, canvas) {
+        const metrics = this.getHexMetrics(canvas);
         // Простой перебор всех ячеек
         for (let row = 0; row < this.boardSize; row++) {
             for (let col = 0; col < this.boardSize; col++) {
-                const center = this.getHexCenter(row, col, canvas);
+                const center = this.getHexCenter(row, col, canvas, metrics);
                 const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
                 
                 if (distance < center.hexSize * 0.9) {
@@ -1603,6 +1617,7 @@ class HexagonalBattleship {
         // Получаем реальные размеры canvas (уже с учетом DPR)
         const canvasWidth = canvas.width / (window.devicePixelRatio || 1);
         const canvasHeight = canvas.height / (window.devicePixelRatio || 1);
+        const metrics = this.getHexMetrics(canvas);
         
         ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         
@@ -1634,7 +1649,7 @@ class HexagonalBattleship {
         // Рисуем все гексы используя ОДИН метод вычисления координат
         for (let row = 0; row < this.boardSize; row++) {
             for (let col = 0; col < this.boardSize; col++) {
-                const center = this.getHexCenter(row, col, canvas);
+                const center = this.getHexCenter(row, col, canvas, metrics);
                 const isLastClicked = 
                     (showShips && this.lastClickedHexMyBoard && 
                      this.lastClickedHexMyBoard.row === row && this.lastClickedHexMyBoard.col === col) ||
@@ -1697,7 +1712,7 @@ class HexagonalBattleship {
                 
                 ctx.globalAlpha = 0.6;
                 for (const pos of positions) {
-                    const center = this.getHexCenter(pos.row, pos.col, canvas);
+                    const center = this.getHexCenter(pos.row, pos.col, canvas, metrics);
                     this.drawHex(ctx, center.x, center.y, center.hexSize, valid ? 'ship-preview' : 'invalid-preview', showShips, pos.row, pos.col, false, false);
                 }
                 ctx.globalAlpha = 1.0;
@@ -1714,12 +1729,13 @@ class HexagonalBattleship {
     }
     
     drawTestLines(ctx, canvas) {
+        const metrics = this.getHexMetrics(canvas);
         this.testLines.forEach((line, lineIndex) => {
             const colors = ['#ff0000', '#00ff00', '#0000ff'];
             const color = colors[lineIndex];
             
             line.cells.forEach(cell => {
-                const center = this.getHexCenter(cell.row, cell.col, canvas);
+                const center = this.getHexCenter(cell.row, cell.col, canvas, metrics);
                 
                 // Рисуем подсветку для тестовой клетки
                 ctx.fillStyle = color + '40'; // прозрачный цвет
