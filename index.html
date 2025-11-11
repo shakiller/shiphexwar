@@ -50,20 +50,8 @@
 
             
             <div class="players">
-                <div class="player me" id="playerMe">
-                    Ваш </br>флот
-                    <div class="score" id="scoreMe">
-                        <span class="score-number">0</span>
-                        <span class="score-label">кораблей</span>
-                    </div>
-                </div>
-                <div class="player opponent" id="playerOpponent">
-                    Флот </br>противника
-                    <div class="score" id="scoreOpponent">
-                        <span class="score-number">0</span>
-                        <span class="score-label">кораблей</span>
-                    </div>
-                </div>
+                
+                
             </div>
             <div class="rotation-controls">
                 <button class="rotation-btn" id="rotateLeft">↶ Повернуть влево</button>
@@ -104,14 +92,28 @@
 
         <div class="game-boards">
             <div class="board-container">
-                <div class="board-title">Ваше поле</div>
+                <!--div class="board-title">Ваше поле</div-->
+                <div class="player me" id="playerMe">
+                    Ваш флот
+                    <div class="score" id="scoreMe">
+                        <span class="score-number">0</span>
+                        <span class="score-label">кораблей</span>
+                    </div>
+                </div>
                 <div class="canvas-container">
                     <div class="mouse-coords" id="myBoardCoords">x: 0, y: 0</div>
                     <canvas id="myBoard"></canvas>
                 </div>
             </div>
             <div class="board-container">
-                <div class="board-title">Поле противника</div>
+                <!--div class="board-title">Поле противника</div-->
+                <div class="player opponent" id="playerOpponent">
+                    Флот противника
+                    <div class="score" id="scoreOpponent">
+                        <span class="score-number">0</span>
+                        <span class="score-label">кораблей</span>
+                    </div>
+                </div>
                 <div class="canvas-container">
                     <div class="mouse-coords" id="opponentBoardCoords">x: 0, y: 0</div>
                     <canvas id="opponentBoard"></canvas>
