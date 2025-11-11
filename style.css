@@ -1,3 +1,112 @@
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 13, 40, 0.65);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 999;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.winner-modal {
+    background: linear-gradient(160deg, rgba(0, 45, 90, 0.85), rgba(15, 65, 120, 0.95));
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 18px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    padding: 28px 32px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.winner-modal::before {
+    content: '';
+    position: absolute;
+    inset: -60px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
+    animation: winner-glow 6s infinite alternate;
+}
+
+.winner-modal > * {
+    position: relative;
+    z-index: 1;
+}
+
+.winner-title {
+    font-size: 2em;
+    font-weight: 800;
+    color: #FFD700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+    margin-bottom: 12px;
+}
+
+.winner-body {
+    font-size: 1em;
+    color: #E6F7FF;
+    margin-bottom: 22px;
+}
+
+.winner-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.winner-btn {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.winner-btn.primary {
+    background: linear-gradient(135deg, #24C6DC 0%, #514A9D 100%);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(36, 198, 220, 0.35);
+}
+
+.winner-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(36, 198, 220, 0.45);
+}
+
+.winner-btn.secondary {
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.winner-btn.secondary:hover {
+    transform: translateY(-2px);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+@keyframes winner-glow {
+    from {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    to {
+        transform: scale(1.2);
+        opacity: 0.95;
+    }
+}
 * {
     margin: 0;
     padding: 0;

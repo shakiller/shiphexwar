@@ -91,6 +91,65 @@ class HexagonalBattleship {
         this.drawBoards();
         this.updateZoomDisplay();
         this.updateZoomControls();
+        this.initWinnerModal();
+    }
+
+    initWinnerModal() {
+        const modalHtml = `
+            <div class="modal-overlay" id="winnerModalOverlay">
+                <div class="winner-modal">
+                    <div class="winner-title" id="winnerTitle">Победа!</div>
+                    <div class="winner-body" id="winnerMessage">Вы выиграли матч</div>
+                    <div class="winner-actions">
+                        <button class="winner-btn primary" id="newGameFromModal">Новая игра</button>
+                        <button class="winner-btn secondary" id="closeWinnerModal">Закрыть</button>
+                    </div>
+                </div>
+            </div>`;
+
+        if (!document.getElementById('winnerModalOverlay')) {
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        const overlay = document.getElementById('winnerModalOverlay');
+        const closeBtn = document.getElementById('closeWinnerModal');
+        const newGameBtn = document.getElementById('newGameFromModal');
+
+        if (closeBtn && overlay) {
+            closeBtn.addEventListener('click', () => this.hideWinnerModal());
+            overlay.addEventListener('click', (event) => {
+                if (event.target === overlay) {
+                    this.hideWinnerModal();
+                }
+            });
+        }
+        if (newGameBtn) {
+            newGameBtn.addEventListener('click', () => {
+                this.hideWinnerModal();
+                this.initializeGame();
+            });
+        }
+    }
+
+    showWinnerModal({ winner = 'me', message = '' } = {}) {
+        const overlay = document.getElementById('winnerModalOverlay');
+        const title = document.getElementById('winnerTitle');
+        const body = document.getElementById('winnerMessage');
+        if (!overlay || !title || !body) {
+            return;
+        }
+
+        const isPlayerWinner = winner === 'me';
+        title.textContent = isPlayerWinner ? 'Победа!' : 'Поражение';
+        body.textContent = message || (isPlayerWinner ? 'Вы одержали верх в сражении.' : 'Противник оказался сильнее в этот раз.');
+        overlay.classList.add('visible');
+    }
+
+    hideWinnerModal() {
+        const overlay = document.getElementById('winnerModalOverlay');
+        if (overlay) {
+            overlay.classList.remove('visible');
+        }
     }
     
     // Устанавливаем размеры canvas с учетом devicePixelRatio
@@ -1260,7 +1319,7 @@ class HexagonalBattleship {
         if (this.checkGameOver()) {
             this.gamePhase = 'gameover';
             this.updateGamePhase();
-            setTimeout(() => alert('Вы победили!'), 100);
+            setTimeout(() => this.showWinnerModal({ winner: 'me', message: 'Вы успешно разгромили флот противника!' }), 150);
             return;
         }
         
@@ -1538,7 +1597,7 @@ class HexagonalBattleship {
         if (this.checkGameOver()) {
             this.gamePhase = 'gameover';
             this.updateGamePhase();
-            setTimeout(() => alert('Противник победил!'), 100);
+            setTimeout(() => this.showWinnerModal({ winner: 'opponent', message: 'Противник одержал победу в этом сражении.' }), 150);
             return;
         }
         
@@ -1579,7 +1638,7 @@ class HexagonalBattleship {
             if (this.checkGameOver()) {
                 this.gamePhase = 'gameover';
                 this.updateGamePhase();
-                setTimeout(() => alert('Противник победил!'), 100);
+                setTimeout(() => this.showWinnerModal({ winner: 'opponent', message: 'Противник одержал победу в этом сражении.' }), 150);
                 return;
             }
             
