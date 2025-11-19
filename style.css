@@ -389,6 +389,50 @@ canvas {
     font-size: 0.9em;
 }
 
+.peerjs-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    margin: 10px 0;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    font-size: 0.9em;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.status-indicator.checking {
+    background: #FFD700;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-indicator.success {
+    background: #4CAF50;
+    box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+}
+
+.status-indicator.error {
+    background: #FF5252;
+    box-shadow: 0 0 8px rgba(255, 82, 82, 0.6);
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
 #roomInfo {
     background: rgba(233, 236, 239, 0.2);
     padding: 8px;
@@ -397,6 +441,37 @@ canvas {
     margin-top: 8px;
     display: none;
     font-size: 0.9em;
+}
+
+.room-id-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: space-between;
+}
+
+.copy-btn {
+    padding: 4px 8px;
+    font-size: 0.85em;
+    min-width: 32px;
+    height: 28px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.copy-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.copy-btn:active {
+    transform: scale(0.95);
 }
 
 .sync-controls {

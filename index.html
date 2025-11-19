@@ -19,8 +19,12 @@
             
             <div id="onlineLobby" style="display: none;">
                 <h3>Онлайн игра</h3>
+                <div class="peerjs-status" id="peerjsStatus">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="statusText">Проверка серверов...</span>
+                </div>
                 <div class="online-buttons">
-                    <button onclick="createOnlineGame()" class="control-btn">Создать комнату</button>
+                    <button id="createRoomBtn" onclick="createOnlineGame()" class="control-btn" title="Ожидание проверки серверов...">Создать комнату</button>
                     <div style="margin: 8px 0; text-align: center">или</div>
                     <input type="text" id="roomIdInput" placeholder="ID комнаты">
                     <button onclick="joinOnlineGame()" class="control-btn">Присоединиться</button>

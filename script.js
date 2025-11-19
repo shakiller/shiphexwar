@@ -92,6 +92,7 @@ class HexagonalBattleship {
         this.updateZoomDisplay();
         this.updateZoomControls();
         this.initWinnerModal();
+        this.checkPeerJSServers();
     }
 
     initWinnerModal() {
@@ -566,6 +567,7 @@ class HexagonalBattleship {
             if (!connectionOpen) {
                 this.updateSyncStatus('Подключитесь или создайте комнату, чтобы синхронизироваться.', 'info');
             }
+            this.checkPeerJSServers();
         } else {
             this.updateSyncControls({ visible: false, enabled: false });
             this.updateSyncStatus();
@@ -2006,6 +2008,181 @@ class HexagonalBattleship {
     }
     
     // ОНЛАЙН-ФУНКЦИОНАЛЬНОСТЬ
+    checkPeerJSServers() {
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        
+        if (!statusIndicator || !statusText) {
+            return;
+        }
+        
+        // Блокируем кнопку создания комнаты
+        if (createRoomBtn) {
+            createRoomBtn.disabled = true;
+            createRoomBtn.textContent = 'Ожидание сервера...';
+            createRoomBtn.title = 'Ожидание проверки серверов...';
+            createRoomBtn.style.opacity = '0.6';
+            createRoomBtn.style.cursor = 'not-allowed';
+        }
+        
+        statusIndicator.className = 'status-indicator checking';
+        statusText.textContent = 'Проверка серверов...';
+        
+        let resolved = false;
+        
+        const enableButton = () => {
+            if (createRoomBtn && !createRoomBtn.disabled) {
+                // Уже разблокирована
+                return;
+            }
+            if (createRoomBtn) {
+                createRoomBtn.disabled = false;
+                createRoomBtn.textContent = 'Создать комнату';
+                createRoomBtn.title = '';
+                createRoomBtn.style.opacity = '';
+                createRoomBtn.style.cursor = '';
+            }
+        };
+        
+        const markSuccess = () => {
+            if (!resolved) {
+                resolved = true;
+                statusIndicator.className = 'status-indicator success';
+                statusText.textContent = 'Серверы доступны';
+                enableButton();
+            }
+        };
+        
+        const markError = () => {
+            if (!resolved) {
+                resolved = true;
+                statusIndicator.className = 'status-indicator error';
+                statusText.textContent = 'Серверы недоступны';
+                // При ошибке тоже разблокируем, но с предупреждением
+                enableButton();
+            }
+        };
+        
+        // Проверка через создание тестового Peer (самый надёжный способ)
+        const testPeer = new Peer({
+            host: '0.peerjs.com',
+            port: 443,
+            path: '/',
+            pingInterval: 5000
+        });
+        
+        testPeer.on('open', () => {
+            if (!resolved) {
+                markSuccess();
+                testPeer.destroy();
+            }
+        });
+        
+        testPeer.on('error', (err) => {
+            if (!resolved) {
+                // Только критические ошибки означают недоступность
+                if (err.type === 'server-error' || err.type === 'network' || err.type === 'socket-error') {
+                    markError();
+                } else {
+                    // Другие ошибки (ID занят, invalid-id и т.д.) означают что серверы работают
+                    // Сервер ответил, значит он доступен
+                    markSuccess();
+                }
+                testPeer.destroy();
+            }
+        });
+        
+        // Финальный таймаут - если за 3 секунды ничего не произошло, разблокируем кнопку
+        // (возможно просто медленное соединение, но серверы могут работать)
+        setTimeout(() => {
+            if (!resolved) {
+                testPeer.destroy();
+                // Разблокируем кнопку, но оставляем статус "проверка"
+                // Пользователь может попробовать создать комнату
+                statusIndicator.className = 'status-indicator checking';
+                statusText.textContent = 'Проверка... (можно попробовать создать комнату)';
+                enableButton();
+            }
+        }, 3000);
+    }
+    
+    updatePeerJSStatus(success) {
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const createRoomBtn = document.getElementById('createRoomBtn');
+        
+        if (!statusIndicator || !statusText) {
+            return;
+        }
+        
+        if (success) {
+            statusIndicator.className = 'status-indicator success';
+            statusText.textContent = 'Серверы доступны';
+            
+            // Разблокируем кнопку если она была заблокирована
+            if (createRoomBtn && createRoomBtn.disabled) {
+                createRoomBtn.disabled = false;
+                createRoomBtn.textContent = 'Создать комнату';
+                createRoomBtn.title = '';
+                createRoomBtn.style.opacity = '';
+                createRoomBtn.style.cursor = '';
+            }
+        }
+    }
+    
+    copyRoomId() {
+        const roomId = this.roomId || document.getElementById('roomIdDisplay')?.textContent;
+        if (!roomId) {
+            return;
+        }
+        
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(roomId).then(() => {
+                const copyBtn = document.getElementById('copyRoomIdBtn');
+                if (copyBtn) {
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = '✓';
+                    copyBtn.style.background = '#4CAF50';
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                        copyBtn.style.background = '';
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Ошибка копирования:', err);
+                this.fallbackCopyRoomId(roomId);
+            });
+        } else {
+            this.fallbackCopyRoomId(roomId);
+        }
+    }
+    
+    fallbackCopyRoomId(roomId) {
+        const textArea = document.createElement('textarea');
+        textArea.value = roomId;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            const copyBtn = document.getElementById('copyRoomIdBtn');
+            if (copyBtn) {
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✓';
+                copyBtn.style.background = '#4CAF50';
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.background = '';
+                }, 2000);
+            }
+        } catch (err) {
+            console.error('Ошибка копирования:', err);
+        }
+        document.body.removeChild(textArea);
+    }
+    
     createOnlineGame() {
         this.isOnline = true;
         this.isHost = true;
@@ -2020,8 +2197,21 @@ class HexagonalBattleship {
         this.peer.on('open', (id) => {
             this.roomId = id;
             this.updateConnectionStatus(`Комната создана! ID: ${id}`, 'success');
-            document.getElementById('roomInfo').innerHTML = `ID комнаты: <strong>${id}</strong><br>Ожидаем подключения...`;
-            document.getElementById('roomInfo').style.display = 'block';
+            this.updatePeerJSStatus(true); // Обновляем статус - серверы точно работают
+            const roomInfo = document.getElementById('roomInfo');
+            roomInfo.innerHTML = `
+                <div class="room-id-container">
+                    <span>ID комнаты: <strong id="roomIdDisplay">${id}</strong></span>
+                    <button class="copy-btn" id="copyRoomIdBtn" title="Копировать ID">📋</button>
+                </div>
+                <div style="margin-top: 8px; font-size: 0.9em;">Ожидаем подключения...</div>
+            `;
+            roomInfo.style.display = 'block';
+            
+            const copyBtn = document.getElementById('copyRoomIdBtn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', () => this.copyRoomId());
+            }
         });
         
         this.peer.on('connection', (conn) => {
@@ -2055,6 +2245,7 @@ class HexagonalBattleship {
         
         this.peer.on('open', (id) => {
             this.roomId = roomId;
+            this.updatePeerJSStatus(true); // Обновляем статус - серверы работают
             this.connection = this.peer.connect(roomId);
             this.setupConnection();
             this.updateConnectionStatus('Подключаемся к комнате...', 'info');
@@ -2069,6 +2260,7 @@ class HexagonalBattleship {
     setupConnection() {
         this.connection.on('open', () => {
             this.updateConnectionStatus('Подключено!', 'success');
+            this.updatePeerJSStatus(true); // Подтверждаем что серверы работают
             this.updateSyncControls({ visible: true, enabled: true });
             this.updateSyncStatus('Соединение установлено. Можно синхронизировать.', 'success');
             if (!this.isHost) {
