@@ -1326,7 +1326,10 @@ class HexagonalBattleship {
         }
         
         if (this.isOnline) {
-            this.currentPlayer = 'opponent';
+            // Если попадание - ход остаётся у игрока, если промах - переходит противнику
+            if (!hit) {
+                this.currentPlayer = 'opponent';
+            }
             this.updateGamePhase();
             this.sendData({
                 type: 'shot',
@@ -1337,9 +1340,15 @@ class HexagonalBattleship {
                 nextRole: this.getActivePlayerRole()
             });
         } else {
-            this.currentPlayer = 'opponent';
-            this.updateGamePhase();
-            setTimeout(() => this.makeBotMove(), 800);
+            // Если попадание - ход остаётся у игрока, если промах - переходит боту
+            if (!hit) {
+                this.currentPlayer = 'opponent';
+                this.updateGamePhase();
+                setTimeout(() => this.makeBotMove(), 800);
+            } else {
+                // При попадании ход остаётся у игрока
+                this.updateGamePhase();
+            }
         }
     }
     
@@ -1603,8 +1612,16 @@ class HexagonalBattleship {
             return;
         }
         
-        this.currentPlayer = 'me';
-        this.updateGamePhase();
+        // Если попадание - бот продолжает ход, если промах - ход переходит игроку
+        if (hit) {
+            // Бот попадает - продолжает стрелять
+            this.updateGamePhase();
+            setTimeout(() => this.makeBotMove(), 800);
+        } else {
+            // Бот промахивается - ход переходит игроку
+            this.currentPlayer = 'me';
+            this.updateGamePhase();
+        }
     }
     
     // СТАРЫЙ МЕТОД ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ
@@ -1645,7 +1662,8 @@ class HexagonalBattleship {
             }
             
             if (this.isOnline) {
-                const nextRoleToSend = this.getMyRole();
+                // Если попадание - противник продолжает ход, если промах - ход переходит игроку
+                const nextRoleToSend = hit ? this.getOpponentRole() : this.getMyRole();
                 this.sendData({
                     type: 'shot_result',
                     row,
@@ -1656,7 +1674,14 @@ class HexagonalBattleship {
                 });
             }
 
-            this.currentPlayer = nextRole ? this.mapRoleToPerspective(nextRole) : 'me';
+            // Если попадание - противник продолжает ход, если промах - ход переходит игроку
+            if (hit) {
+                // Противник попадает - продолжает ход
+                this.currentPlayer = 'opponent';
+            } else {
+                // Противник промахивается - ход переходит игроку
+                this.currentPlayer = 'me';
+            }
             this.updateGamePhase();
         }
     }
@@ -2359,10 +2384,16 @@ class HexagonalBattleship {
                 this.drawBoards();
                 this.updateScores();
                 
+                // Если попадание - ход остаётся у стрелявшего, если промах - переходит другому
                 if (data.nextRole) {
                     this.currentPlayer = this.mapRoleToPerspective(data.nextRole);
-                } else if (!data.hit) {
-                    this.currentPlayer = 'me';
+                } else {
+                    // Если попадание - ход остаётся у игрока (me), если промах - переходит противнику
+                    if (data.hit) {
+                        this.currentPlayer = 'me';
+                    } else {
+                        this.currentPlayer = 'opponent';
+                    }
                 }
                 this.updateGamePhase();
                 break;
